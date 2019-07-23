@@ -2,13 +2,13 @@
 #include <TMC2130Stepper.h>
 #include "machine.h"
 #include "timings.h"
+#include "queue.h"
 
 typedef TMC2130Stepper Stepper;
 
 typedef char i8;
 typedef int i16;
 typedef long i32;
-
 typedef byte u8;
 // typedef unsigned int u16;
 typedef unsigned long u32;
@@ -16,18 +16,15 @@ typedef unsigned long u32;
 Stepper clamp = Stepper(EN_CLAMP, DIR_CLAMP, STEP_CLAMP, CS_CLAMP);
 Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
 
-
 inline void step_clamp() {
   static bool step = false;
   step = !step;
-
   digitalWrite(STEP_CLAMP,step?HIGH:LOW);
 }
 
 inline void step_feed() {
   static bool step = false;
   step = !step;
-
   digitalWrite(STEP_FEED,step?HIGH:LOW);
 }
 
@@ -60,8 +57,15 @@ struct Job {
 
 };
 
+typedef struct Job Job;
 
-struct Job current_job;
+Job current_job;
+
+// Job relative_job(float ) {
+//
+// }
+
+
 
 ISR(TIMER1_COMPA_vect) {
   static bool do_step[3] = {false,false,false};
