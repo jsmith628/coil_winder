@@ -29,16 +29,50 @@
 #define DRIVE_MS 1
 
 #define DRIVE_STEPS_PER_TURN 200
-
 #define ROD_MM_PER_TURN 2
+#define AVR_CLK_FREQ 16000000
+#define AVR_TIMER_MAX 0xFFFF
 
 #define GEAR_1_TEETH 20
 #define GEAR_2_TEETH 8
+
+#include "timings.h"
+#include "queue.h"
 
 void step_clamp();
 void step_feed();
 void step_drive();
 
+enum EndConditionType: u8 {
+  NONE = 0,
+  COUNT = 1,
+  STALL_GUARD = 2
+};
+
+struct EndCondition {
+  EndConditionType ty;
+  u32 cond;
+  volatile bool triggered;
+};
+
+struct Job {
+
+  u16 frequency;
+  SyncEvents<3> sync;
+  bool dirs[3];
+  EndCondition end[3];
+  volatile u32 steps;
+
+  Job();
+
+};
+
+typedef struct EndCondition EndCondition;
+typedef struct Job Job;
+
+bool queue_job(Job j);
+
+void machine_loop();
 void machine_init();
 
 

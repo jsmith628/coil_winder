@@ -28,10 +28,14 @@ class Queue {
     T pop_top();
     T pop_bottom();
 
+    void clear();
+
 };
 
+template<class T, byte P> Queue<T,P>::Queue() { clear(); }
+
 template<class T, byte P>
-Queue<T,P>::Queue() {
+void Queue<T,P>::clear() {
   top = 0;
   bottom = 0;
 }

@@ -1,7 +1,6 @@
 
 #include <TMC2130Stepper.h>
 #include "machine.h"
-#include "timings.h"
 
 typedef TMC2130Stepper Stepper;
 
@@ -37,56 +36,87 @@ inline void step_drive() {
   digitalWrite(STEP_DRIVE,step?HIGH:LOW);
 }
 
-enum EndConditionType: u8 {
-  NONE = 0,
-  COUNT = 1,
-  STALL_GUARD = 2
-};
+Job::Job() {
+  frequency = 0;
+  sync = SyncEvents<3>();
+  steps = 0;
 
-struct EndCondition {
-  EndConditionType ty;
-  u32 cond;
-  bool triggered;
-};
+  for(byte i=0; i<3; i++) {
+    dirs[i] = false;
 
-struct Job {
+    end[i].ty = NONE;
+    end[i].cond = 0;
+    end[i].triggered = false;
+  }
+}
 
-  SyncEvents<3> sync;
-  bool dirs[3];
-  EndCondition end[3];
-  u32 steps;
-
-  Job() {}
-
-};
-
-
-struct Job current_job;
+volatile bool running = false;
+Job current_job = Job();
 
 ISR(TIMER1_COMPA_vect) {
+
   static bool do_step[3] = {false,false,false};
 
-  current_job.steps++;
-  current_job.sync.step(&do_step[0]);
+  if(running) {
 
-  if(!current_job.end[0].triggered && do_step[0]) {
-    step_clamp();
-    if(current_job.end[0].ty == COUNT && current_job.steps>current_job.end[0].cond)
-      current_job.end[0].triggered = true;
+      current_job.steps++;
+      current_job.sync.step(&do_step[0]);
+
+      running = false;
+
+      for(byte i=0; i<3; i++) {
+        if(!current_job.end[0].triggered) {
+
+          running = true;
+          if(do_step[i]){
+            switch(i) {
+              case 2: step_drive(); break;
+              case 0: step_feed(); break;
+              case 1: step_clamp(); break;
+            }
+            if(current_job.end[i].ty == COUNT && current_job.steps>current_job.end[i].cond) {
+              current_job.end[i].triggered = true;
+            }
+          }
+
+        }
+      }
+
   }
 
-  if(!current_job.end[1].triggered && do_step[1]) {
-    step_feed();
-    if(current_job.end[1].ty == COUNT && current_job.steps>current_job.end[1].cond)
-      current_job.end[1].triggered = true;
-  }
+}
 
-  if(!current_job.end[2].triggered && do_step[2]){
-    step_drive();
-    if(current_job.end[2].ty == COUNT && current_job.steps>current_job.end[2].cond)
-      current_job.end[2].triggered = true;
-  }
+Queue<Job,4> job_queue = Queue<Job,4>();
 
+bool queue_job(Job j) { return job_queue.push_bottom(j); }
+
+void machine_loop() {
+  //if the last command ended, advance the queue
+  if(!running && job_queue.count()>0) {
+    cli(); //make sure no random interrupt bs happens
+      current_job = job_queue.pop_top();
+
+        if(current_job.frequency==0) {
+          //disable the timer
+          TCCR1A = 0;
+          TCCR1B = 0;
+          OCR1A = 0;
+          TIMSK1 = 0;
+          running = false;
+        } else {
+          //setup the timer
+          TCCR1A = 0;
+          TCCR1B = 1 | (1<<WGM12);
+
+          OCR1A = (AVR_CLK_FREQ / current_job.frequency);
+
+          TIMSK1 = 2;
+          running = true;
+        }
+
+
+    sei();
+  }
 }
 
 void machine_init() {
