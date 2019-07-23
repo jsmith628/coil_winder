@@ -92,30 +92,34 @@ bool queue_job(Job j) { return job_queue.push_bottom(j); }
 
 void machine_loop() {
   //if the last command ended, advance the queue
-  if(!running && job_queue.count()>0) {
-    cli(); //make sure no random interrupt bs happens
-      current_job = job_queue.pop_top();
+  if(!running) {
 
-        if(current_job.frequency==0) {
-          //disable the timer
-          TCCR1A = 0;
-          TCCR1B = 0;
-          OCR1A = 0;
-          TIMSK1 = 0;
-          running = false;
-        } else {
-          //setup the timer
-          TCCR1A = 0;
-          TCCR1B = 1 | (1<<WGM12);
+    TIMSK1 = 0; //disable timer interrupts
 
-          OCR1A = (AVR_CLK_FREQ / current_job.frequency);
+    //enact the next job if there is one
+    if(job_queue.count()>0){
+      cli(); //make sure no random interrupt bs happens
+        current_job = job_queue.pop_top();
 
-          TIMSK1 = 2;
-          running = true;
-        }
+          if(current_job.frequency==0) {
+            //disable the timer
+            TCCR1A = TCCR1B = OCR1A = TIMSK1 = 0;
+            running = false;
+          } else {
+            //setup the timer
+            TCCR1A = 0;
 
+            TCCR1B = 1; //no prescaling
+            TCCR1B |= (1<<WGM12); //clear the timer when it reaches OCR1A
 
-    sei();
+            //the period (in clock cycles) of the step function
+            OCR1A = (AVR_CLK_FREQ / current_job.frequency);
+
+            TIMSK1 = 2; //enable timer interrupt when it reaches OCR1A
+            running = true; //mark the job as running
+          }
+      sei();
+    }
   }
 }
 
