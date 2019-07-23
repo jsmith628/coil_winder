@@ -10,7 +10,8 @@ struct modifier {
 };
 
 struct command {
-  char type[2];
+  char type;
+  unsigned int number;
   struct modifier modifiers[MODIFIERLENGTH];
 
 };
@@ -28,19 +29,26 @@ void display_warning(String type, String details){
   Serial.println(details);
 }
 
+void display_warning(String type, unsigned int specificType, String details){
+  Serial.print("Warning: ");
+  Serial.print(type);
+  Serial.print(specificType);
+  Serial.println(details);
+}
+
 
 void interpret_gcode(struct command c){
   //A, B, S, F, D/P, R
-  if(c.type[0] == 'G'){
-    switch (c.type[1]) {
+  if(c.type == 'G'){
+    switch (c.number) {
       default:
-        display_warning("G"+c.type[1]+" is not a valid G command.");
+        display_warning("G",c.number," is not a valid G command.");
         break;
       case 0:
-        g0(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2], c.modifiers[3]);
+        g0(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
         break;
       case 1:
-        g1(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2], c.modifiers[3]);
+        g1(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
         break;
       case 4:
         g4(c.modifiers[6].f, c.modifiers[2].f);
@@ -52,22 +60,22 @@ void interpret_gcode(struct command c){
         g21();
         break;
       case 28:
-        g28(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2]);
+        g28(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f);
         break;
       case 31:
-        g31((c.modifiers[0]!=0),(c.modifiers[1]!=0),(c.modifiers[5]!=0),c.modifiers[2]);
+        g31((c.modifiers[0].f!=0),(c.modifiers[1].f!=0),(c.modifiers[5].f!=0),c.modifiers[2].f);
         break;
       case 32:
-        g32(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2], c.modifiers[3]);
+        g32(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
         break;
       case 50:
-        g50(c.modifiers[2]);
+        g50(c.modifiers[2].f);
         break;
       case 52:
         g52(c.modifiers[0].f, c.modifiers[1].f);
         break;
       case 76:
-        g76(c.modifiers[0].f,c.modifiers[1].f,c.modifiers[2].f,c.modifiers[3].f,(int)c.modifiers[0].f,(c.modifiers[5]!=0));
+        g76(c.modifiers[0].f,c.modifiers[1].f,c.modifiers[2].f,c.modifiers[3].f,(int)c.modifiers[0].f,(c.modifiers[5].f!=0));
         break;
       case 90:
         g90();
@@ -84,19 +92,19 @@ void interpret_gcode(struct command c){
     }
 
 
-  }elseif(c.type[0] == 'M'){
-    switch (c.type[1]) {
-      case default:
-        display_warning("M"+c.type[1]+" is not a valid G command.");
+  }else if(c.type == 'M'){
+    switch (c.number) {
+      default:
+        display_warning("M",c.number," is not a valid G command.");
         break;
       case 0:
         m0();
         break;
       case 3:
-        m3(c.modifiers[2]);
+        m3(c.modifiers[2].f);
         break;
       case 4:
-        m4(c.modifiers[2]);
+        m4(c.modifiers[2].f);
         break;
       case 5:
         m5();
@@ -127,7 +135,7 @@ void interpret_gcode(struct command c){
           }
         break;
       case 125:
-        m125(c.modifiers[0], c.modifiers[1]);
+        m125(c.modifiers[0].f, c.modifiers[1].f);
         break;
       case 120:
         m120();
@@ -136,7 +144,7 @@ void interpret_gcode(struct command c){
         m121();
         break;
       case 203:
-        m203();
+        m203(c.modifiers[3].f);
         break;
       case 500:
         m500();
@@ -151,7 +159,7 @@ void interpret_gcode(struct command c){
 
 
   }else{
-    display_warning("Invalid GCODE", "Commands must start with G or M.")
+    display_warning("Invalid GCODE", "Commands must start with G or M.");
   }
 
 }
@@ -168,13 +176,13 @@ struct command parse(String g){
   // Evaluate command
 
   if(g.charAt(0) == 'G' || g.charAt(0) == 'M'){
-    c.type[0] = g.charAt(0);
+    c.type = g.charAt(0);
     int x = 1;
     int y = 0;
     while (x<g.length()&&isDigit(g.charAt(x))){
       x++;
     }
-    c.type[1] = (byte)g.substring(1, x).toInt();
+    c.number = (byte)g.substring(1, x).toInt();
 
     // Evaluate parameters
 
@@ -183,7 +191,7 @@ struct command parse(String g){
     while (x < g.length()){
       if (isAlpha(g.charAt(x))){
         if(g.charAt(x) == 'G' || g.charAt(x) == 'M'){
-          interpret_gcode(parse(g.substring(x, g.length()));
+          interpret_gcode(parse(g.substring(x, g.length())));
           break;
         }
           struct modifier m;
@@ -232,8 +240,8 @@ struct command parse(String g){
     //Serial.println(c.modifiers[0].c);
     return c;
   } else {
-      c.type[0] = 0;
-      c.type[1] = 0;
+      c.type = 0;
+      c.number = 0;
       return c;
   }
 }
@@ -251,8 +259,8 @@ bool read_command(){
 
   //        Serial.println(com.modifiers[0].c);
         // Serial.println("Printing");
-        // Serial.print((char)com.type[0]);
-        // Serial.print((byte)com.type[1]);
+        // Serial.print((char)com.type);
+        // Serial.print((byte)com.number);
         // Serial.print("");
         // for (int x = 0; x < MODIFIERLENGTH; x++){
         //   Serial.print(com.modifiers[x].c);

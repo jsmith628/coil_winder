@@ -26,8 +26,8 @@ void g28 (float a, float b, float s) {}
 //Feed until skip (A axis enable, B axis enable, Direction (0 = +, 1 = -), Speed)
 void g31 (bool a, bool b, bool d, float s) {}
 
-//Single point threading, non-cycle (for cycle, use G76) (A axis position, B axis position, Feedrate)
-void g32 (float a, float b, float f) {}
+//Single point threading, non-cycle (for cycle, use G76) (A axis position, B axis position, Spindle speed, Feedrate)
+void g32 (float a, float b, float s, float f) {}
 
 //Define maximum spindle Speed (Speed)
 void g50 (float s) {}
@@ -35,8 +35,8 @@ void g50 (float s) {}
 //Local coordinates, defines program zero to a new location (A position 0, B position 0)
 void g52 (float a, float b) {}
 
-//Repetitive threading cycle (A axis position, B axis position, Feedrate, Repititions, Symmetrical)
-void g76 (float a, float b, float f, int r, bool p) {}
+//Repetitive threading cycle (A axis position, B axis position, Spindle speed, Feedrate, Repititions, Symmetrical)
+void g76 (float a, float b, float s, float f, int r, bool p) {}
 
 //Absolute positioning (position defined from machine zero)
 void g90() {}
@@ -90,7 +90,7 @@ void m112() {
 
 //Current position
 float m114() {}
-void m114(bool a, bool b, float* dest) {}
+void m114(bool a, bool b) {}
 
 //Park (A axis position, B axis postion)
 void m125(float a, float b) {}
@@ -105,10 +105,10 @@ void m121() {}
 void m203(float f) {}
 
 //Save settings to EEPROM
-void m501() {}
+void m500() {}
 
 //Load settings from EEPROM
-void m502() {}
+void m501() {}
 
 //Read out settings from EEPROM
 void m503() {}
