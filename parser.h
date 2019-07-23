@@ -63,7 +63,7 @@ void interpret_gcode(struct command c){
         g28(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f);
         break;
       case 31:
-        g31((c.modifiers[0].f!=0),(c.modifiers[1].f!=0),(c.modifiers[5].f!=0),c.modifiers[2].f);
+        g31((c.modifiers[0].f!=0),(c.modifiers[1].f!=0),c.modifiers[2].f);
         break;
       case 32:
         g32(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);

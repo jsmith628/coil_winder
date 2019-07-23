@@ -21,8 +21,8 @@ void g21 ();
 //Home axis (A final position, B final position, Speed)
 void g28 (float a, float b, float s);
 
-//Feed until skip (A axis enable, B axis enable, Direction (0 = +, 1 = -), Speed)
-void g31 (bool a, bool b, bool d, float s);
+//Feed until skip (A axis enable, B axis enable, Speed)
+void g31 (bool a, bool b, float s);
 
 //Single point threading, non-cycle (for cycle, use G76) (A axis position, B axis position, Spindle speed, Feedrate)
 void g32 (float a, float b, float s, float f);
