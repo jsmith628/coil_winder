@@ -10,6 +10,7 @@
 #define CS_CLAMP 53
 #define CLAMP_STEPS_PER_TURN 200
 #define CLAMP_INVERT_DIR false
+#define CLAMP_INVERT_EN true
 #define CLAMP_MS 16
 #define CLAMP_CURRENT 800
 #define CLAMP_SGT 20
@@ -20,6 +21,7 @@
 #define CS_FEED 49
 #define FEED_STEPS_PER_TURN 200
 #define FEED_INVERT_DIR false
+#define FEED_INVERT_EN true
 #define FEED_MS 16
 #define FEED_CURRENT 800
 #define FEED_SGT 20
@@ -28,6 +30,7 @@
 #define DIR_DRIVE 48
 #define STEP_DRIVE 46
 #define DRIVE_INVERT_DIR false
+#define DRIVE_INVERT_EN true
 #define DRIVE_MS 1
 
 #define DRIVE_STEPS_PER_TURN 200
@@ -46,24 +49,25 @@ void step_feed();
 void step_drive();
 
 enum EndConditionType: u8 {
-  NONE = 0,
+  IMMEDIATE = 0,
   COUNT = 1,
-  STALL_GUARD = 2
+  STALL_GUARD = 2,
+  FOREVER = 0xFF
 };
 
 struct EndCondition {
   EndConditionType ty;
   u32 cond;
-  volatile bool triggered;
+  bool triggered;
 };
 
 struct Job {
 
   u16 frequency;
-  SyncEvents<3> sync;
+  int ratio[3];
   bool dirs[3];
+  bool enabled[3];
   EndCondition end[3];
-  volatile u32 steps;
 
   Job();
 
@@ -73,6 +77,7 @@ typedef struct EndCondition EndCondition;
 typedef struct Job Job;
 
 bool queue_job(Job j);
+void clear_jobs();
 
 void machine_loop();
 void machine_init();
