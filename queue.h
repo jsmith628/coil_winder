@@ -45,7 +45,7 @@ template<class T, byte P> inline unsigned int Queue<T,P>::mask() { return (1 << 
 
 template<class T, byte P>
 unsigned int Queue<T,P>::count() {
-  if(top > bottom) {
+  if(top >= bottom) {
     return top - bottom;
   } else {
     return capacity() - (bottom - top);

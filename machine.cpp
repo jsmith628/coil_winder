@@ -178,14 +178,14 @@ void machine_init() {
 
   clamp.begin();
   clamp.rms_current(CLAMP_CURRENT);
-  clamp.dedge(1);
+  clamp.dedge(CLAMP_DEDGE);
   clamp.microsteps(CLAMP_MS);
   clamp.TCOOLTHRS(0xFFFFF);
   clamp.sgt(CLAMP_SGT);
 
   feed.begin();
   feed.rms_current(FEED_CURRENT);
-  feed.dedge(1);
+  feed.dedge(FEED_DEDGE);
   feed.microsteps(FEED_MS);
   feed.TCOOLTHRS(0xFFFFF);
   feed.sgt(FEED_SGT);

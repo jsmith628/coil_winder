@@ -11,9 +11,11 @@
 #define CLAMP_STEPS_PER_TURN 200
 #define CLAMP_INVERT_DIR false
 #define CLAMP_INVERT_EN true
+#define CLAMP_DEDGE true
 #define CLAMP_MS 16
 #define CLAMP_CURRENT 800
 #define CLAMP_SGT 20
+
 
 #define EN_FEED 56
 #define DIR_FEED 61
@@ -22,6 +24,7 @@
 #define FEED_STEPS_PER_TURN 200
 #define FEED_INVERT_DIR false
 #define FEED_INVERT_EN true
+#define FEED_DEDGE true
 #define FEED_MS 16
 #define FEED_CURRENT 800
 #define FEED_SGT 20
@@ -31,10 +34,12 @@
 #define STEP_DRIVE 46
 #define DRIVE_INVERT_DIR false
 #define DRIVE_INVERT_EN true
+#define DRIVE_DEDGE false
 #define DRIVE_MS 1
 
 #define DRIVE_STEPS_PER_TURN 200
 #define ROD_MM_PER_TURN 2
+#define TIMINGS_PRECISION 8
 #define AVR_CLK_FREQ 16000000
 #define AVR_TIMER_MAX 0xFFFF
 
@@ -57,7 +62,7 @@ enum EndConditionType: u8 {
 
 struct EndCondition {
   EndConditionType ty;
-  u32 cond;
+  u16 cond;
   bool triggered;
 };
 
