@@ -101,23 +101,28 @@ void machine_loop() {
       cli(); //make sure no random interrupt bs happens
         current_job = job_queue.pop_top();
 
-          if(current_job.frequency==0) {
-            //disable the timer
-            TCCR1A = TCCR1B = OCR1A = TIMSK1 = 0;
-            running = false;
-          } else {
-            //setup the timer
-            TCCR1A = 0;
+        //set the dir pins
+        digitalWrite(DIR_FEED, current_job.dirs[0] ^ FEED_INVERT_DIR ?HIGH:LOW);
+        digitalWrite(DIR_CLAMP, current_job.dirs[1] ^ CLAMP_INVERT_DIR ?HIGH:LOW);
+        digitalWrite(DIR_DRIVE, current_job.dirs[2] ^ DRIVE_INVERT_DIR ?HIGH:LOW);
 
-            TCCR1B = 1; //no prescaling
-            TCCR1B |= (1<<WGM12); //clear the timer when it reaches OCR1A
+        if(current_job.frequency==0) {
+          //disable the timer
+          TCCR1A = TCCR1B = OCR1A = TIMSK1 = 0;
+          running = false;
+        } else {
+          //setup the timer
+          TCCR1A = 0;
 
-            //the period (in clock cycles) of the step function
-            OCR1A = (AVR_CLK_FREQ / current_job.frequency);
+          TCCR1B = 1; //no prescaling
+          TCCR1B |= (1<<WGM12); //clear the timer when it reaches OCR1A
 
-            TIMSK1 = 2; //enable timer interrupt when it reaches OCR1A
-            running = true; //mark the job as running
-          }
+          //the period (in clock cycles) of the step function
+          OCR1A = (AVR_CLK_FREQ / current_job.frequency);
+
+          TIMSK1 = 2; //enable timer interrupt when it reaches OCR1A
+          running = true; //mark the job as running
+        }
       sei();
     }
   }
