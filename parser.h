@@ -247,7 +247,6 @@ struct command parse(String g){
 }
 
 struct command com;
-Queue<struct command, 3> q = Queue<struct command, 3>();
 
 
 bool read_command(){
