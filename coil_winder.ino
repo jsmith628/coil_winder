@@ -4,15 +4,14 @@
 #include <TMC2130Stepper.h>
 // #include "timings.h"
 #include "machine.h"
+#include "gcodes.h"
 
 void setup() {
-
-  Serial.begin(115200);
-
+  parser_setup();
   machine_init();
-
 }
 
 void loop() {
-
+  read_command();
+  machine_loop();
 }
