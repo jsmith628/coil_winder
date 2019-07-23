@@ -94,7 +94,7 @@ void m120();
 void m121();
 
 //Set max feedrate (Feedrate)
-void m203(float f)
+void m203(float f);
 
 //Save settings to EEPROM
 void m501();
