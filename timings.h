@@ -9,7 +9,7 @@ template<int N>
 class SyncEvents {
   private:
     int timings[N];
-    int current[N];
+    volatile int current[N];
 
   public:
     SyncEvents();

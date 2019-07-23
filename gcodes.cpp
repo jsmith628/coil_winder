@@ -1,108 +1,114 @@
-#ifndef _GCODE_H_
-  #define _GCODE_H_
+
+#include <Arduino.h>
+#include "gcodes.h"
+#include "machine.h"
 
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis , B axis position, Speed, Feedrate)
-void g0 (float a, float b, float s, float f);
+void g0 (float a, float b, float s, float f) {}
 
 //Linear interpolate (A axis position, B axis position, Speed | Feedrate)
-void g1 (float a, float b, float s, float f);
+void g1 (float a, float b, float s, float f) {}
 
 //Dwell (P (millis) | S (seconds) )
-void g4 (float p, float s);
+void g4 (float p, float s) {}
 
 //Programming in inches
-void g20 ();
+void g20 () {}
 
 //Programming in millimeters
-void g21 ();
+void g21 () {}
 
 //Home axis (A final position, B final position, Speed)
-void g28 (float a, float b, float s);
+void g28 (float a, float b, float s) {}
 
 //Feed until skip (A axis enable, B axis enable, Direction (0 = +, 1 = -), Speed)
-void g31 (bool a, bool b, bool d, float s);
+void g31 (bool a, bool b, bool d, float s) {}
 
 //Single point threading, non-cycle (for cycle, use G76) (A axis position, B axis position, Feedrate)
-void g32 (float a, float b, float f);
+void g32 (float a, float b, float f) {}
 
 //Define maximum spindle Speed (Speed)
-void g50 (float s);
+void g50 (float s) {}
 
 //Local coordinates, defines program zero to a new location (A position 0, B position 0)
-void g52 (float a, float b);
+void g52 (float a, float b) {}
 
 //Repetitive threading cycle (A axis position, B axis position, Feedrate, Repititions, Symmetrical)
-void g76 (float a, float b, float f, int r, bool p);
+void g76 (float a, float b, float f, int r, bool p) {}
 
 //Absolute positioning (position defined from machine zero)
-void g90();
+void g90() {}
 
 //Incremental positioning (position defined relative to previous position)
-void g91();
+void g91() {}
 
 //Feedrate per minute
-void g94();
+void g94() {}
 
 //Feedrate per revolution
-void g95();
+void g95() {}
 
 //M codes define miscellaneous commands
 
 //Unconditional stop
-void m0();
+void m0() {}
 
 //Spindle on, CW (Speed)
-void m3(float s);
+void m3(float s) {}
 
 //Spindle on, CCW (Speed)
-void m4(float s);
+void m4(float s) {}
 
 //Spindle stop
-void m5();
+void m5() {}
 
 //Enable steppers
-void m17();
+void m17() {}
 
 //Disable steppers
-void m18();
+void m18() {
+}
 
 //End of program, return to program top
-void m30();
+void m30() {}
 
 //Subprogram call
-void m98();
+void m98() {}
 
 //Subprogram end
-void m99();
+void m99() {}
 
 //Emergency stop, immediately stop program and disable all steppers
-void m112();
+void m112() {
+  digitalWrite(EN_FEED, FEED_INVERT_EN ? HIGH : LOW);
+  digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
+  digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
+  clear_queue();
+}
 
 //Current position
-float m114();
-void m114(bool a, bool b, float* dest);
+float m114() {}
+void m114(bool a, bool b, float* dest) {}
 
 //Park (A axis position, B axis postion)
-void m125(float a, float b);
+void m125(float a, float b) {}
 
 //Enable software endstops
-void m120();
+void m120() {}
 
 //Disable software endstops
-void m121();
+void m121() {}
 
 //Set max feedrate (Feedrate)
-void m203(float f);
+void m203(float f) {}
 
 //Save settings to EEPROM
-void m501();
+void m501() {}
 
 //Load settings from EEPROM
-void m502();
+void m502() {}
 
 //Read out settings from EEPROM
-void m503();
-
-#endif
+void m503() {}

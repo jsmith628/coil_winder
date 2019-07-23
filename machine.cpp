@@ -1,7 +1,6 @@
 
 #include <TMC2130Stepper.h>
 #include "machine.h"
-#include "timings.h"
 
 typedef TMC2130Stepper Stepper;
 
@@ -37,56 +36,140 @@ inline void step_drive() {
   digitalWrite(STEP_DRIVE,step?HIGH:LOW);
 }
 
-enum EndConditionType: u8 {
-  NONE = 0,
-  COUNT = 1,
-  STALL_GUARD = 2
-};
+Job::Job() {
+  frequency = 0;
 
-struct EndCondition {
-  EndConditionType ty;
-  u32 cond;
-  bool triggered;
-};
+  for(byte i=0; i<3; i++) {
+    dirs[i] = false;
+    enabled[i] = false;
+    ratio[i] = 0;
 
-struct Job {
+    end[i].ty = NONE;
+    end[i].cond = 0;
+    end[i].triggered = false;
+  }
+}
 
-  SyncEvents<3> sync;
-  bool dirs[3];
-  EndCondition end[3];
-  u32 steps;
-
-  Job() {}
-
-};
-
-
-struct Job current_job;
+struct JobProgress {
+  volatile bool running = false;
+  volatile SyncEvents<3> sync;
+  volatile EndCondition end[3];
+  volatile u32 step_num = 0;
+} current_job;
 
 ISR(TIMER1_COMPA_vect) {
+
   static bool do_step[3] = {false,false,false};
 
-  current_job.steps++;
-  current_job.sync.step(&do_step[0]);
+  if(current_job.running) {
 
-  if(!current_job.end[0].triggered && do_step[0]) {
-    step_clamp();
-    if(current_job.end[0].ty == COUNT && current_job.steps>current_job.end[0].cond)
-      current_job.end[0].triggered = true;
+      current_job.sync.step(&do_step[0]);
+      current_job.running = false;
+
+      for(byte i=0; i<3; i++) {
+        if(!current_job.end[0].triggered) {
+
+          bool trig = true;
+          if(do_step[i]){
+
+            //step the proper stepper
+            switch(i) {
+              case 2: step_drive(); break;
+              case 0: step_feed(); break;
+              case 1: step_clamp(); break;
+            }
+
+            //test if this stepper needs to stop
+            if(
+              (current_job.end[i].ty == COUNT && current_job.step_num>current_job.end[i].cond) ||
+              (current_job.end[i].ty == IMMEDIATE)
+            ) {
+              current_job.end[i].triggered = true;
+              trig = false;
+            }
+
+          }
+
+          if(trig) current_job.running = true;
+
+        }
+      }
+
+      //we have done another step
+      current_job.step_num++;
+
   }
 
-  if(!current_job.end[1].triggered && do_step[1]) {
-    step_feed();
-    if(current_job.end[1].ty == COUNT && current_job.steps>current_job.end[1].cond)
-      current_job.end[1].triggered = true;
-  }
+}
 
-  if(!current_job.end[2].triggered && do_step[2]){
-    step_drive();
-    if(current_job.end[2].ty == COUNT && current_job.steps>current_job.end[2].cond)
-      current_job.end[2].triggered = true;
-  }
+Queue<Job,4> job_queue = Queue<Job,4>();
 
+bool queue_job(Job j) { return job_queue.push_bottom(j); }
+void clear_jobs() {
+  job_queue.clear();
+  current_job.running = false;
+}
+
+void machine_loop() {
+  //if the last command ended, advance the queue
+  if(!running) {
+
+    TIMSK1 = 0; //disable timer interrupts
+
+    //enact the next job if there is one
+    if(job_queue.count()>0){
+      cli(); //make sure no random interrupt bs happens
+        Job next_job = job_queue.pop_top();
+
+        //set the dir pins
+        digitalWrite(DIR_FEED, next_job.dirs[0] ^ FEED_INVERT_DIR ?HIGH:LOW);
+        digitalWrite(DIR_CLAMP, next_job.dirs[1] ^ CLAMP_INVERT_DIR ?HIGH:LOW);
+        digitalWrite(DIR_DRIVE, next_job.dirs[2] ^ DRIVE_INVERT_DIR ?HIGH:LOW);
+
+        //set the enable pins
+        digitalWrite(EN_FEED, next_job.enabled[0] ^ FEED_INVERT_EN ?HIGH:LOW);
+        digitalWrite(EN_CLAMP, next_job.enabled[1] ^ CLAMP_INVERT_EN ?HIGH:LOW);
+        digitalWrite(EN_DRIVE, next_job.enabled[2] ^ DRIVE_INVERT_EN ?HIGH:LOW);
+
+        current_job.step_num = 0;
+        current_job.sync = Sync(next_job.sync);
+
+        current_job.running = false;
+        for(byte i=0; i<3; i++) {
+          struct EndCondition end = next_job.end[i];
+          current_job.end[i] = end;
+          switch(end.ty) {
+            case COUNT: if(end.cond > 0) running = true; break;
+            case STALL_GUARD:
+              switch(i) {
+                case 0: feed.sgt(end.cond); break;
+                case 1: clamp.sgt(end.cond); break;
+              }
+            case FOREVER: running = true; break;
+            case IMMEDIATE: break;
+          }
+        }
+
+        //timer config
+        if(next_job.frequency==0) {
+          //disable the timer
+          TCCR1A = TCCR1B = OCR1A = TIMSK1 = 0;
+        } else {
+          //setup the timer
+          TCCR1A = 0;
+
+          TCCR1B = 1; //no prescaling
+          TCCR1B |= (1<<WGM12); //clear the timer when it reaches OCR1A
+
+          //the period (in clock cycles) of the step function
+          OCR1A = (AVR_CLK_FREQ / next_job.frequency);
+
+          TIMSK1 = 2; //enable timer interrupt when it reaches OCR1A
+        }
+
+      sei();
+    }
+  }
 }
 
 void machine_init() {
@@ -111,9 +194,9 @@ void machine_init() {
   pinMode(STEP_DRIVE, OUTPUT);
   pinMode(DIR_DRIVE, OUTPUT);
 
-  digitalWrite(EN_CLAMP, HIGH);
-  digitalWrite(EN_FEED, HIGH);
-  digitalWrite(EN_DRIVE, HIGH);
+  digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
+  digitalWrite(EN_FEED, FEED_INVERT_EN ? HIGH : LOW);
+  digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
 
   cli();
 
