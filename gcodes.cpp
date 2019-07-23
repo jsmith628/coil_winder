@@ -85,7 +85,7 @@ void m112() {
   digitalWrite(EN_FEED, FEED_INVERT_EN ? HIGH : LOW);
   digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
   digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
-  clear_queue();
+  clear_jobs();
 }
 
 //Current position

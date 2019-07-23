@@ -18,13 +18,13 @@ struct command {
 
 
 void display_warning(String type){
-  Serial.print("Warning: ")
-  Serial.println(s);
+  Serial.print("Warning: ");
+  Serial.println(type);
 }
 
 void display_warning(String type, String details){
-  Serial.print("Warning: ")
-  Serial.println(s);
+  Serial.print("Warning: ");
+  Serial.println(type);
   Serial.println(details);
 }
 
@@ -33,7 +33,7 @@ void interpret_gcode(struct command c){
   //A, B, S, F, D/P, R
   if(c.type[0] == 'G'){
     switch (c.type[1]) {
-      case default:
+      default:
         display_warning("G"+c.type[1]+" is not a valid G command.");
         break;
       case 0:

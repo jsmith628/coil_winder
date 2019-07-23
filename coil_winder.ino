@@ -5,6 +5,7 @@
 // #include "timings.h"
 #include "machine.h"
 #include "gcodes.h"
+#include "parser.h"
 
 void setup() {
   parser_setup();

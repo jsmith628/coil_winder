@@ -44,7 +44,7 @@ Job::Job() {
     enabled[i] = false;
     ratio[i] = 0;
 
-    end[i].ty = NONE;
+    end[i].ty = IMMEDIATE;
     end[i].cond = 0;
     end[i].triggered = false;
   }
@@ -52,7 +52,7 @@ Job::Job() {
 
 struct JobProgress {
   volatile bool running = false;
-  volatile SyncEvents<3> sync;
+  SyncEvents<3> sync;
   volatile EndCondition end[3];
   volatile u32 step_num = 0;
 } current_job;
@@ -112,7 +112,7 @@ void clear_jobs() {
 
 void machine_loop() {
   //if the last command ended, advance the queue
-  if(!running) {
+  if(!current_job.running) {
 
     TIMSK1 = 0; //disable timer interrupts
 
@@ -132,20 +132,20 @@ void machine_loop() {
         digitalWrite(EN_DRIVE, next_job.enabled[2] ^ DRIVE_INVERT_EN ?HIGH:LOW);
 
         current_job.step_num = 0;
-        current_job.sync = Sync(next_job.sync);
+        current_job.sync = SyncEvents<3>(next_job.ratio);
 
         current_job.running = false;
         for(byte i=0; i<3; i++) {
           struct EndCondition end = next_job.end[i];
           current_job.end[i] = end;
           switch(end.ty) {
-            case COUNT: if(end.cond > 0) running = true; break;
+            case COUNT: if(end.cond > 0) current_job.running = true; break;
             case STALL_GUARD:
               switch(i) {
                 case 0: feed.sgt(end.cond); break;
                 case 1: clamp.sgt(end.cond); break;
               }
-            case FOREVER: running = true; break;
+            case FOREVER: current_job.running = true; break;
             case IMMEDIATE: break;
           }
         }
