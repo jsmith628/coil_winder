@@ -45,6 +45,9 @@ void g0 (float a, float b, float s, float f) {
   next.jobs[1].end.cond = (float) ((da / s) * next.jobs[1].frequency);
   next.jobs[2].end.cond = next.jobs[2].end.cond;
 
+  a_pos = a;
+  b_pos = b;
+
 }
 
 //Linear interpolate (A axis position, B axis position, Speed | Feedrate)
