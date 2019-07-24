@@ -19,14 +19,12 @@ Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
 inline void step_clamp() {
   static bool step = false;
   step = !step;
-
   digitalWrite(STEP_CLAMP,step?HIGH:LOW);
 }
 
 inline void step_feed() {
   static bool step = false;
   step = !step;
-
   digitalWrite(STEP_FEED,step?HIGH:LOW);
 }
 
@@ -50,122 +48,149 @@ Job::Job() {
   }
 }
 
+//A handy container object for all of the timer registers
+typedef struct {
+    volatile uint16_t * tccr;
+    volatile uint16_t * tcnt;
+    volatile uint16_t * ocra;
+    volatile uint16_t * ocrb;
+    volatile uint16_t * ocrc;
+    volatile uint8_t * timsk;
+} Timer;
+
+//all of the 16bit timers on the ATMEGA2560
+Timer timers[4] = {
+  {(volatile uint16_t*) &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &OCR1C, &TIMSK1},
+  {(volatile uint16_t*) &TCCR3A, &TCNT3, &OCR3A, &OCR3B, &OCR3C, &TIMSK3},
+  {(volatile uint16_t*) &TCCR4A, &TCNT4, &OCR4A, &OCR4B, &OCR4C, &TIMSK4},
+  {(volatile uint16_t*) &TCCR5A, &TCNT5, &OCR5A, &OCR5B, &OCR5C, &TIMSK5},
+};
+
 struct JobProgress {
   volatile bool running = false;
-  SyncEvents<3> sync;
-  volatile EndCondition end[3];
-  volatile u32 step_num = 0;
-} current_job;
+  volatile u32 remaining = 0;
+  volatile EndConditionType end;
+} current_jobs[NUM_SUBJOBS];
 
-ISR(TIMER1_COMPA_vect) {
+//to be run in the ISRs
+inline void do_job(byte id) {
 
-  static bool do_step[3] = {false,false,false};
+  //dont do anything if we're done
+  if(current_jobs[id].running){
 
-  if(current_job.running) {
+    //step the proper stepper
+    switch(i) {
+      case 2: step_drive(); break;
+      case 0: step_feed(); break;
+      case 1: step_clamp(); break;
+    }
 
-      current_job.sync.step(&do_step[0]);
-      current_job.running = false;
-
-      for(byte i=0; i<3; i++) {
-        if(!current_job.end[0].triggered) {
-
-          bool trig = true;
-          if(do_step[i]){
-
-            //step the proper stepper
-            switch(i) {
-              case 2: step_drive(); break;
-              case 0: step_feed(); break;
-              case 1: step_clamp(); break;
-            }
-
-            //test if this stepper needs to stop
-            if(
-              (current_job.end[i].ty == COUNT && current_job.step_num>current_job.end[i].cond) ||
-              (current_job.end[i].ty == IMMEDIATE)
-            ) {
-              current_job.end[i].triggered = true;
-              trig = false;
-            }
-
-          }
-
-          if(trig) current_job.running = true;
-
-        }
+    //check if we need to stop this job
+    if(current_jobs[id].end == COUNT) {
+      //update the progress, and check if we've hit 0
+      if((--current_jobs[id].remaining) == 0) {
+        //mark this job as done
+        current_jobs[id].running = false;
+        *timers[id].timsk = 0; //if we're done we don't need to run this interrupt again
       }
-
-      //we have done another step
-      current_job.step_num++;
+    }
 
   }
 
 }
 
-Queue<Job,4> job_queue = Queue<Job,4>();
 
-bool queue_job(Job j) { return job_queue.push_bottom(j); }
+ISR(TIMER1_COMPA_vect) { do_job(0) }
+ISR(TIMER3_COMPA_vect) { do_job(1) }
+ISR(TIMER4_COMPA_vect) { do_job(2) }
+ISR(TIMER5_COMPA_vect) { do_job(3) }
+
+Queue<Jobs,4> job_queue = Queue<Jobs,4>();
+
+bool queue_jobs(Jobs j) { return job_queue.push_bottom(j); }
 void clear_jobs() {
   job_queue.clear();
-  current_job.running = false;
+  for(byte i=0; i<NUM_SUBJOBS; current_jobs[i++].running = false);
 }
 
-void machine_loop() {
-  //if the last command ended, advance the queue
-  if(!current_job.running) {
+bool job_done() {
+  for(byte i=0; i<NUM_SUBJOBS; i++){
+    if(current_jobs[i].running) {
+      return true;
+    }
+  }
+  return false;
+}
 
-    TIMSK1 = 0; //disable timer interrupts
+bool busy() { return job_queue.count>0 || job_done();}
+
+void machine_loop() {
+
+  //if the last command ended, advance the queue
+  if(job_done()) {
 
     //enact the next job if there is one
     if(job_queue.count()>0){
+      Job next[SUBJOBS_PER_JOB] = job_queue.pop_top().jobs;
+
+      //set the dir pins
+      if(next[0].dir!=KEEP) digitalWrite(DIR_FEED, next[0].dir==SET ^ FEED_INVERT_DIR ? HIGH : LOW);
+      if(next[1].dir!=KEEP) digitalWrite(DIR_CLAMP, next[1].dir==SET ^ CLAMP_INVERT_DIR ? HIGH : LOW);
+      if(next[2].dir!=KEEP) digitalWrite(DIR_DRIVE, next[2].dir==SET ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+
+      //set the enable pins
+      if(next[0].en!=KEEP) digitalWrite(EN_FEED, next[0].en ^ FEED_INVERT_EN ? HIGH : LOW);
+      if(next[1].en!=KEEP) digitalWrite(EN_CLAMP, next[1].en ^ CLAMP_INVERT_EN ? HIGH : LOW);
+      if(next[2].en!=KEEP) digitalWrite(EN_DRIVE, next[2].en ^ DRIVE_INVERT_EN ? HIGH : LOW);
+
       cli(); //make sure no random interrupt bs happens
-        Job next_job = job_queue.pop_top();
 
-        //set the dir pins
-        digitalWrite(DIR_FEED, next_job.dirs[0] ^ FEED_INVERT_DIR ?HIGH:LOW);
-        digitalWrite(DIR_CLAMP, next_job.dirs[1] ^ CLAMP_INVERT_DIR ?HIGH:LOW);
-        digitalWrite(DIR_DRIVE, next_job.dirs[2] ^ DRIVE_INVERT_DIR ?HIGH:LOW);
+        for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
 
-        //set the enable pins
-        digitalWrite(EN_FEED, next_job.enabled[0] ^ FEED_INVERT_EN ?HIGH:LOW);
-        digitalWrite(EN_CLAMP, next_job.enabled[1] ^ CLAMP_INVERT_EN ?HIGH:LOW);
-        digitalWrite(EN_DRIVE, next_job.enabled[2] ^ DRIVE_INVERT_EN ?HIGH:LOW);
-
-        current_job.step_num = 0;
-        current_job.sync = SyncEvents<3>(next_job.ratio);
-
-        current_job.running = false;
-        for(byte i=0; i<3; i++) {
-          struct EndCondition end = next_job.end[i];
-          current_job.end[i] = end;
+          //setup the end-condition, get if this job is already over
+          //and setup how many cycles are remaining
+          EndCondition end = next[i].end;
+          current_jobs[i].end = end.ty;
           switch(end.ty) {
-            case COUNT: if(end.cond > 0) current_job.running = true; break;
+            case COUNT:
+              if(end.cond > 0) {
+                current_jobs[i].remaining = end.cond;
+                current_jobs[i].running = true;
+              }
+              break;
             case STALL_GUARD:
+              current_jobs[i].running = true;
               switch(i) {
                 case 0: feed.sgt(end.cond); break;
                 case 1: clamp.sgt(end.cond); break;
               }
-            case FOREVER: current_job.running = true; break;
-            case IMMEDIATE: break;
+            case FOREVER: current_jobs[i].running = true; break;
+            case IMMEDIATE: current_jobs[i].running = false; break;
           }
+
+          //setup the timers
+
+          //clear the timer value
+          *timers[i].tcnt = 0;
+
+          //clear the config
+          //note we don't need prescaling because we wont really need events triggering
+          //more than once a second
+          *timers[i].tccr = 0;
+
+          if(current_jobs[i].running) {
+            *timers[i].tccr |= (1<<WGM12); //clear the timer when it reaches OCRnA
+            *timers[i].timsk = 2; //enable interrupt of OCRnA
+            *timers[i].ocra = (AVR_CLK_FREQ / next_job.frequency);//get the timer period
+          } else {
+            //disable the timer interrupt and clear the compare value
+            *timers[i].timsk = 0;
+            *timers[i].ocra = 0;
+          }
+
         }
 
-        //timer config
-        if(next_job.frequency==0) {
-          //disable the timer
-          TCCR1A = TCCR1B = OCR1A = TIMSK1 = 0;
-        } else {
-          //setup the timer
-          TCCR1A = 0;
 
-          TCCR1B = 1; //no prescaling
-          TCCR1B |= (1<<WGM12); //clear the timer when it reaches OCR1A
-
-          //the period (in clock cycles) of the step function
-          OCR1A = (AVR_CLK_FREQ / next_job.frequency);
-
-          TIMSK1 = 2; //enable timer interrupt when it reaches OCR1A
-        }
 
       sei();
     }
@@ -197,16 +222,6 @@ void machine_init() {
   digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
   digitalWrite(EN_FEED, FEED_INVERT_EN ? HIGH : LOW);
   digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
-
-  cli();
-
-  TCCR1A = 0;
-  TCCR1B = 1 | (1<<WGM12);
-  OCR1A = 0x0FFF;
-  TIMSK1 = 2;
-
-  sei();
-
 
  // digitalWrite(EN_CLAMP, LOW);
  // digitalWrite(EN_FEED, LOW);
