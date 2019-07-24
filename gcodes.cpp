@@ -5,13 +5,47 @@
 
 //STATE
 
+enum {FEEDRATE_TIME,FEEDRATE_DIST} feed_mode = FEEDRATE_DIST;
+
+float units = 1;//millimeters
+
+//current axis position
 float a_pos = 0;
 float b_pos = 0;
 
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis , B axis position, Speed, Feedrate)
-void g0 (float a, float b, float s, float f /*rev/mm*/) {}
+void g0 (float a, float b, float s, float f) {
+
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  float turn_speed;
+  switch(feed_mode) {
+    case FEEDRATE_TIME: turn_speed = f*units; break;
+    case FEEDRATE_DIST: turn_speed = s*f; break;
+  }
+
+  s *= units;
+
+  next.jobs[0].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * FEED_STEPS_PER_TURN * FEED_MS);
+  next.jobs[1].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * CLAMP_STEPS_PER_TURN * CLAMP_MS);
+  next.jobs[2].frequency = (uint16_t) (((turn_speed * GEAR_1_TEETH) / GEAR_2_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS);
+
+  float da = a - a_pos;
+  float db = b - b_pos;
+
+  next.jobs[0].dir = da<0 ? SET : da>0 ? UNSET : KEEP;
+  next.jobs[1].dir = db<0 ? SET : db>0 ? UNSET : KEEP;
+  next.jobs[2].dir = f<0 ? SET : f>0 ? UNSET : KEEP;
+
+  for(byte i=0; i<3; i++) next.jobs[i].end.ty = COUNT;
+
+  next.jobs[0].end.cond = (float) ((da / s) * next.jobs[0].frequency);
+  next.jobs[1].end.cond = (float) ((da / s) * next.jobs[1].frequency);
+  next.jobs[2].end.cond = next.jobs[2].end.cond;
+
+}
 
 //Linear interpolate (A axis position, B axis position, Speed | Feedrate)
 void g1 (float a, float b, float s, float f) {}
@@ -20,10 +54,10 @@ void g1 (float a, float b, float s, float f) {}
 void g4 (float p, float s) {}
 
 //Programming in inches
-void g20 () {}
+void g20 () {units = 25.4;}
 
 //Programming in millimeters
-void g21 () {}
+void g21 () {units = 1.0;}
 
 //Home axis (A final position, B final position, Speed)
 void g28 (float a, float b, float s) {}
@@ -50,10 +84,10 @@ void g90() {}
 void g91() {}
 
 //Feedrate per minute
-void g94() {}
+void g94() {feed_mode = FEEDRATE_TIME;}
 
 //Feedrate per revolution
-void g95() {}
+void g95() {feed_mode = FEEDRATE_DIST;}
 
 //M codes define miscellaneous commands
 
@@ -76,6 +110,7 @@ void m17() {
     next.jobs[i] = NOOP_JOB;
     next.jobs[i].en = SET;
   }
+  next.jobs[3] = NOOP_JOB;
   Serial.println("Steppers Enabled");
   queue_jobs(next);
 }
@@ -87,6 +122,7 @@ void m18() {
     next.jobs[i] = NOOP_JOB;
     next.jobs[i].en = UNSET;
   }
+  next.jobs[3] = NOOP_JOB;
   Serial.println("Steppers Enabled");
   queue_jobs(next);
 }
