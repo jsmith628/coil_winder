@@ -34,20 +34,6 @@ inline void step_drive() {
   digitalWrite(STEP_DRIVE,step?HIGH:LOW);
 }
 
-Job::Job() {
-  frequency = 0;
-
-  for(byte i=0; i<3; i++) {
-    dirs[i] = false;
-    enabled[i] = false;
-    ratio[i] = 0;
-
-    end[i].ty = IMMEDIATE;
-    end[i].cond = 0;
-    end[i].triggered = false;
-  }
-}
-
 //A handy container object for all of the timer registers
 typedef struct {
     volatile uint16_t * tccr;
@@ -70,7 +56,7 @@ struct JobProgress {
   volatile bool running = false;
   volatile u32 remaining = 0;
   volatile EndConditionType end;
-} current_jobs[NUM_SUBJOBS];
+} current_jobs[SUBJOBS_PER_JOB];
 
 //to be run in the ISRs
 inline void do_job(byte id) {
@@ -79,7 +65,7 @@ inline void do_job(byte id) {
   if(current_jobs[id].running){
 
     //step the proper stepper
-    switch(i) {
+    switch(id) {
       case 2: step_drive(); break;
       case 0: step_feed(); break;
       case 1: step_clamp(); break;
@@ -100,21 +86,21 @@ inline void do_job(byte id) {
 }
 
 
-ISR(TIMER1_COMPA_vect) { do_job(0) }
-ISR(TIMER3_COMPA_vect) { do_job(1) }
-ISR(TIMER4_COMPA_vect) { do_job(2) }
-ISR(TIMER5_COMPA_vect) { do_job(3) }
+ISR(TIMER1_COMPA_vect) { do_job(0); }
+ISR(TIMER3_COMPA_vect) { do_job(1); }
+ISR(TIMER4_COMPA_vect) { do_job(2); }
+ISR(TIMER5_COMPA_vect) { do_job(3); }
 
 Queue<Jobs,4> job_queue = Queue<Jobs,4>();
 
 bool queue_jobs(Jobs j) { return job_queue.push_bottom(j); }
 void clear_jobs() {
   job_queue.clear();
-  for(byte i=0; i<NUM_SUBJOBS; current_jobs[i++].running = false);
+  for(byte i=0; i<SUBJOBS_PER_JOB; current_jobs[i++].running = false);
 }
 
 bool job_done() {
-  for(byte i=0; i<NUM_SUBJOBS; i++){
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++){
     if(current_jobs[i].running) {
       return true;
     }
@@ -122,7 +108,7 @@ bool job_done() {
   return false;
 }
 
-bool busy() { return job_queue.count>0 || job_done();}
+bool busy() { return job_queue.count()>0 || job_done();}
 
 void machine_loop() {
 
@@ -131,7 +117,8 @@ void machine_loop() {
 
     //enact the next job if there is one
     if(job_queue.count()>0){
-      Job next[SUBJOBS_PER_JOB] = job_queue.pop_top().jobs;
+      Jobs j = job_queue.pop_top();
+      Job next[SUBJOBS_PER_JOB] = {j.jobs[0],j.jobs[1],j.jobs[2],j.jobs[3]};
 
       //set the dir pins
       if(next[0].dir!=KEEP) digitalWrite(DIR_FEED, next[0].dir==SET ^ FEED_INVERT_DIR ? HIGH : LOW);
@@ -181,7 +168,7 @@ void machine_loop() {
           if(current_jobs[i].running) {
             *timers[i].tccr |= (1<<WGM12); //clear the timer when it reaches OCRnA
             *timers[i].timsk = 2; //enable interrupt of OCRnA
-            *timers[i].ocra = (AVR_CLK_FREQ / next_job.frequency);//get the timer period
+            *timers[i].ocra = (AVR_CLK_FREQ / next[i].frequency);//get the timer period
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].timsk = 0;
@@ -189,8 +176,6 @@ void machine_loop() {
           }
 
         }
-
-
 
       sei();
     }
