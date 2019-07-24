@@ -8,6 +8,7 @@
 #define DIR_CLAMP 55
 #define STEP_CLAMP 54
 #define CS_CLAMP 53
+#define SG_CLAMP 15
 #define CLAMP_STEPS_PER_TURN 200
 #define CLAMP_INVERT_DIR false
 #define CLAMP_INVERT_EN true
@@ -21,6 +22,7 @@
 #define DIR_FEED 61
 #define STEP_FEED 60
 #define CS_FEED 49
+#define SG_FEED 2
 #define FEED_STEPS_PER_TURN 200
 #define FEED_INVERT_DIR false
 #define FEED_INVERT_EN true
@@ -46,6 +48,8 @@
 #define GEAR_1_TEETH 20
 #define GEAR_2_TEETH 8
 
+#define SUBJOBS_PER_JOB 4
+
 #include "timings.h"
 #include "queue.h"
 
@@ -53,36 +57,35 @@ void step_clamp();
 void step_feed();
 void step_drive();
 
-enum EndConditionType: u8 {
+enum EndConditionType: uint8_t {
   IMMEDIATE = 0,
   COUNT = 1,
   STALL_GUARD = 2,
   FOREVER = 0xFF
 };
 
-struct EndCondition {
+typedef struct {
   EndConditionType ty;
-  u16 cond;
-  bool triggered;
-};
+  uint16_t cond;
+} EndCondition;
 
-struct Job {
+enum PinOption: uint8_t { KEEP, SET, UNSET };
 
+typedef struct {
+  PinOption dir;
+  PinOption en;
   u16 frequency;
-  int ratio[3];
-  bool dirs[3];
-  bool enabled[3];
-  EndCondition end[3];
+  EndCondition end;
+} Job;
 
-  Job();
+typedef struct {
+  Job jobs[SUBJOBS_PER_JOB];
+} Jobs;
 
-};
-
-typedef struct EndCondition EndCondition;
-typedef struct Job Job;
-
-bool queue_job(Job j);
+bool queue_jobs(Jobs j);
 void clear_jobs();
+
+bool busy();
 
 void machine_loop();
 void machine_init();
