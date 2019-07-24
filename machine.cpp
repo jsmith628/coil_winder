@@ -138,9 +138,10 @@ void machine_loop() {
           //and setup how many cycles are remaining
           EndCondition end = next[i].end;
           current_jobs[i].end = end.ty;
+          current_jobs[i].running = false;
           switch(end.ty) {
             case COUNT:
-              if(end.cond > 0) {
+              if(end.cond > 0 && next[i].frequency > 0) {
                 current_jobs[i].remaining = end.cond;
                 current_jobs[i].running = true;
               }
@@ -152,7 +153,7 @@ void machine_loop() {
                 case 1: clamp.sgt(end.cond); break;
               }
             case FOREVER: current_jobs[i].running = true; break;
-            case IMMEDIATE: current_jobs[i].running = false; break;
+            case IMMEDIATE: break;
           }
 
           //setup the timers
