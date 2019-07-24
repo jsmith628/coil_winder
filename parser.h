@@ -4,17 +4,16 @@
 
 // Gx A[f] B[f] S[f]
 
-struct modifier {
+typedef struct {
   char c;
   float f;
-};
+} modifier;
 
-struct command {
+typedef struct {
   char type;
   unsigned int number;
-  struct modifier modifiers[MODIFIERLENGTH];
-
-};
+  modifier modifiers[MODIFIERLENGTH];
+} command;
 
 
 
@@ -37,7 +36,7 @@ void display_warning(String type, unsigned int specificType, String details){
 }
 
 
-void interpret_gcode(struct command c){
+void interpret_gcode(command c){
   //A, B, S, F, D/P, R
   if(c.type == 'G'){
     switch (c.number) {
@@ -165,9 +164,9 @@ void interpret_gcode(struct command c){
 }
 
 
-struct command parse(String g){
+command parse(String g){
 
-  struct command c;
+  command c;
   for (int x = 0; x < MODIFIERLENGTH; x++){
       c.modifiers[x] = {0,NAN};
   }
@@ -194,7 +193,7 @@ struct command parse(String g){
           interpret_gcode(parse(g.substring(x, g.length())));
           break;
         }
-          struct modifier m;
+          modifier m;
           m.c = (char)g.charAt(x);
           y = ++x;
           while ((isDigit(g.charAt(y))||g.charAt(y)=='.'||g.charAt(y)=='-')&& y<g.length()){
@@ -246,7 +245,7 @@ struct command parse(String g){
   }
 }
 
-struct command com;
+command com;
 
 
 bool read_command(){
