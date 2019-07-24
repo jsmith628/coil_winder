@@ -36,20 +36,20 @@ inline void step_drive() {
 
 //A handy container object for all of the timer registers
 typedef struct {
-    volatile uint16_t * tccr;
+    volatile uint8_t * tccrna;
+    volatile uint8_t * tccrnb;
     volatile uint16_t * tcnt;
-    volatile uint16_t * ocra;
-    volatile uint16_t * ocrb;
-    volatile uint16_t * ocrc;
+    volatile uint8_t * ocrah;
+    volatile uint8_t * ocral;
     volatile uint8_t * timsk;
 } Timer;
 
 //all of the 16bit timers on the ATMEGA2560
 Timer timers[4] = {
-  {(volatile uint16_t*) &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &OCR1C, &TIMSK1},
-  {(volatile uint16_t*) &TCCR3A, &TCNT3, &OCR3A, &OCR3B, &OCR3C, &TIMSK3},
-  {(volatile uint16_t*) &TCCR4A, &TCNT4, &OCR4A, &OCR4B, &OCR4C, &TIMSK4},
-  {(volatile uint16_t*) &TCCR5A, &TCNT5, &OCR5A, &OCR5B, &OCR5C, &TIMSK5},
+  {&TCCR3A, &TCCR3B, &TCNT3, &OCR3AH, &OCR3AL, &TIMSK3},
+  {&TCCR4A, &TCCR4B, &TCNT4, &OCR4AH, &OCR4AL, &TIMSK4},
+  {&TCCR5A, &TCCR5B, &TCNT5, &OCR5AH, &OCR5AL, &TIMSK5},
+  {&TCCR1A, &TCCR1A, &TCNT1, &OCR1AH, &OCR1AL, &TIMSK1},
 };
 
 struct JobProgress {
@@ -77,6 +77,7 @@ inline void do_job(byte id) {
       if((--current_jobs[id].remaining) == 0) {
         //mark this job as done
         current_jobs[id].running = false;
+        *timers[id].tccrnb = 0; //if we're done we don't need to run this interrupt again
         *timers[id].timsk = 0; //if we're done we don't need to run this interrupt again
       }
     }
@@ -86,10 +87,10 @@ inline void do_job(byte id) {
 }
 
 
-ISR(TIMER1_COMPA_vect) { do_job(0); }
-ISR(TIMER3_COMPA_vect) { do_job(1); }
-ISR(TIMER4_COMPA_vect) { do_job(2); }
-ISR(TIMER5_COMPA_vect) { do_job(3); }
+ISR(TIMER1_COMPA_vect) { do_job(3); }
+ISR(TIMER3_COMPA_vect) { do_job(0); }
+ISR(TIMER4_COMPA_vect) { do_job(1); }
+ISR(TIMER5_COMPA_vect) { do_job(2); }
 
 Queue<Jobs,4> job_queue = Queue<Jobs,4>();
 
@@ -102,10 +103,10 @@ void clear_jobs() {
 bool job_done() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
     if(current_jobs[i].running) {
-      return true;
+      return false;
     }
   }
-  return false;
+  return true;
 }
 
 bool busy() { return job_queue.count()>0 || job_done();}
@@ -126,9 +127,9 @@ void machine_loop() {
       if(next[2].dir!=KEEP) digitalWrite(DIR_DRIVE, next[2].dir==SET ^ DRIVE_INVERT_DIR ? HIGH : LOW);
 
       //set the enable pins
-      if(next[0].en!=KEEP) digitalWrite(EN_FEED, next[0].en ^ FEED_INVERT_EN ? HIGH : LOW);
-      if(next[1].en!=KEEP) digitalWrite(EN_CLAMP, next[1].en ^ CLAMP_INVERT_EN ? HIGH : LOW);
-      if(next[2].en!=KEEP) digitalWrite(EN_DRIVE, next[2].en ^ DRIVE_INVERT_EN ? HIGH : LOW);
+      if(next[0].en!=KEEP) digitalWrite(EN_FEED, next[0].en==SET ^ FEED_INVERT_EN ? HIGH : LOW);
+      if(next[1].en!=KEEP) digitalWrite(EN_CLAMP, next[1].en==SET ^ CLAMP_INVERT_EN ? HIGH : LOW);
+      if(next[2].en!=KEEP) digitalWrite(EN_DRIVE, next[2].en==SET ^ DRIVE_INVERT_EN ? HIGH : LOW);
 
       cli(); //make sure no random interrupt bs happens
 
@@ -139,6 +140,7 @@ void machine_loop() {
           EndCondition end = next[i].end;
           current_jobs[i].end = end.ty;
           current_jobs[i].running = false;
+
           switch(end.ty) {
             case COUNT:
               if(end.cond > 0 && next[i].frequency > 0) {
@@ -158,23 +160,37 @@ void machine_loop() {
 
           //setup the timers
 
+
           //clear the timer value
           *timers[i].tcnt = 0;
 
           //clear the config
           //note we don't need prescaling because we wont really need events triggering
           //more than once a second
-          *timers[i].tccr = 0;
+          *timers[i].tccrna = 0;
 
           if(current_jobs[i].running) {
-            *timers[i].tccr |= (1<<WGM12); //clear the timer when it reaches OCRnA
+            *timers[i].tccrnb = 1 | (1<<3); //clear the timer when it reaches OCRnA
             *timers[i].timsk = 2; //enable interrupt of OCRnA
-            *timers[i].ocra = (AVR_CLK_FREQ / next[i].frequency);//get the timer period
+            uint16_t period = (AVR_CLK_FREQ / next[i].frequency);//get the timer period
+
+            *timers[i].ocrah = (byte) (period >> 8);
+            *timers[i].ocral = (byte) (period && 0xFF);
           } else {
             //disable the timer interrupt and clear the compare value
+            *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
             *timers[i].timsk = 0;
-            *timers[i].ocra = 0;
+            *timers[i].ocrah = 0;
+            *timers[i].ocral = 0;
           }
+
+
+          // Serial.print(next[i].frequency);
+          // Serial.print(" ");
+          // Serial.print(AVR_CLK_FREQ / next[i].frequency, HEX);
+          // Serial.print(" ");
+          // Serial.print(*timers[i].ocrah, HEX);
+          // Serial.println(*timers[i].ocral, HEX);
 
         }
 

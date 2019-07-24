@@ -38,10 +38,9 @@
 #define DRIVE_INVERT_EN true
 #define DRIVE_DEDGE false
 #define DRIVE_MS 1
-
 #define DRIVE_STEPS_PER_TURN 200
-#define ROD_MM_PER_TURN 2
-#define TIMINGS_PRECISION 8
+
+#define ROD_MM_PER_TURN 8
 #define AVR_CLK_FREQ 16000000
 #define AVR_TIMER_MAX 0xFFFF
 

@@ -26,27 +26,48 @@ void g0 (float a, float b, float s, float f) {
     case FEEDRATE_DIST: turn_speed = s*f; break;
   }
 
-  s *= units;
+  s = abs(s*units);
 
-  next.jobs[0].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * FEED_STEPS_PER_TURN * FEED_MS);
-  next.jobs[1].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * CLAMP_STEPS_PER_TURN * CLAMP_MS);
-  next.jobs[2].frequency = (uint16_t) (((turn_speed * GEAR_1_TEETH) / GEAR_2_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS);
+  next.jobs[0].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1:2));
+  next.jobs[1].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1:2));
+  next.jobs[2].frequency = (uint16_t) (((turn_speed * GEAR_1_TEETH) / GEAR_2_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1:2));
 
   float da = a - a_pos;
   float db = b - b_pos;
 
-  next.jobs[0].dir = da<0 ? SET : da>0 ? UNSET : KEEP;
-  next.jobs[1].dir = db<0 ? SET : db>0 ? UNSET : KEEP;
-  next.jobs[2].dir = f<0 ? SET : f>0 ? UNSET : KEEP;
+  if(da < 0) {
+    next.jobs[0].dir = SET;
+    da *= -1;
+  } else if(da>0) {
+    next.jobs[0].dir = UNSET;
+  }
 
-  for(byte i=0; i<3; i++) next.jobs[i].end.ty = COUNT;
+  if(db < 0) {
+    next.jobs[1].dir = SET;
+    db *= -1;
+  } else if(db>0) {
+    next.jobs[1].dir = UNSET;
+  }
 
-  next.jobs[0].end.cond = (float) ((da / s) * next.jobs[0].frequency);
-  next.jobs[1].end.cond = (float) ((da / s) * next.jobs[1].frequency);
-  next.jobs[2].end.cond = next.jobs[2].end.cond;
+  if(f < 0) {
+    next.jobs[2].dir = SET;
+    f *= -1;
+  } else if(f>0) {
+    next.jobs[2].dir = UNSET;
+  }
 
-  a_pos = a;
-  b_pos = b;
+  next.jobs[0].end.ty = da==0 || a!=a ? IMMEDIATE : COUNT;
+  next.jobs[1].end.ty = db==0 || b!=b ? IMMEDIATE : COUNT;
+  next.jobs[2].end.ty = f==0 || da==0 || a!=a || f!=f ? IMMEDIATE : COUNT;
+
+  next.jobs[0].end.cond = (uint32_t) ((da / s) * next.jobs[0].frequency);
+  next.jobs[1].end.cond = (uint32_t) ((db / s) * next.jobs[1].frequency);
+  next.jobs[2].end.cond = (uint32_t) ((da / s) * next.jobs[2].frequency);
+
+  if(a==a) a_pos = a;
+  if(b==b) b_pos = b;
+
+  queue_jobs(next);
 
 }
 
