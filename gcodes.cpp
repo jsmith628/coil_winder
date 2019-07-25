@@ -3,30 +3,141 @@
 #include "gcodes.h"
 #include "machine.h"
 
+#define DEFAULT_SPEED 1
+#define FEED_STEPS_PER_MM (FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define DRIVE_STEPS_PER_REV ((GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
+
 //STATE
 
+enum {FEEDRATE_TIME,FEEDRATE_DIST} feed_mode = FEEDRATE_DIST;
+
+float units = 1;//millimeters
+
+//current axis position
 float a_pos = 0;
 float b_pos = 0;
+
+Job from_speed_dist(float s, float d, const float steps_per_mm) {
+  Job j = NOOP_JOB;
+
+  if(d==d && d!=0) {
+
+    s = s==s ? abs(s) : (DEFAULT_SPEED * units);
+
+    j.frequency = (uint16_t) (s * steps_per_mm);
+    j.dir = d<0 ? SET : UNSET;
+
+    j.end.ty = COUNT;
+    j.end.cond = (uint16_t) ((abs(d) / s) * j.frequency);
+
+  }
+
+  return j;
+}
+
+
 
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis , B axis position, Speed, Feedrate)
-void g0 (float a, float b, float s, float f /*rev/mm*/) {}
+void g0 (float a, float b, float s, float f) {
+
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  next.jobs[0] = from_speed_dist(s*units, (a-a_pos)*units, FEED_STEPS_PER_MM);
+  next.jobs[1] = from_speed_dist(s*units, (b-b_pos)*units, CLAMP_STEPS_PER_MM);
+
+  switch(feed_mode) {
+    case FEEDRATE_TIME:
+      next.jobs[2] = from_speed_dist(f, f*abs((a-a_pos)/s), DRIVE_STEPS_PER_REV);
+      break;
+    case FEEDRATE_DIST:
+      next.jobs[2] = from_speed_dist(s*f, abs(a-a_pos)*f, DRIVE_STEPS_PER_REV);
+      break;
+  }
+
+  if(a==a) a_pos = a;
+  if(b==b) b_pos = b;
+
+  queue_jobs(next);
+
+}
 
 //Linear interpolate (A axis position, B axis position, Speed | Feedrate)
-void g1 (float a, float b, float s, float f) {}
+void g1 (float a, float b, float s, float f) {
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  float da = a-a_pos;
+  float db = b-b_pos;
+  float d = max(da,db);
+  float t = d/s;
+
+  next.jobs[0] = from_speed_dist(da*units/t, da*units, FEED_STEPS_PER_MM);
+  next.jobs[1] = from_speed_dist(db*units/t, db*units, CLAMP_STEPS_PER_MM);
+
+  switch(feed_mode) {
+    case FEEDRATE_TIME:
+      next.jobs[2] = from_speed_dist(f, f*abs(t), DRIVE_STEPS_PER_REV);
+      break;
+    case FEEDRATE_DIST:
+      next.jobs[2] = from_speed_dist(s*f, abs(d)*f, DRIVE_STEPS_PER_REV);
+      break;
+  }
+
+  if(a==a) a_pos = a;
+  if(b==b) b_pos = b;
+
+  queue_jobs(next);
+}
 
 //Dwell (P (millis) | S (seconds) )
 void g4 (float p, float s) {}
 
 //Programming in inches
-void g20 () {}
+void g20 () {
+  a_pos /= units;
+  b_pos /= units;
+  units = 25.4;
+  a_pos *= units;
+  b_pos *= units;
+}
 
 //Programming in millimeters
-void g21 () {}
+void g21 () {
+  a_pos /= units;
+  b_pos /= units;
+  units = 1.0;
+  a_pos *= units;
+  b_pos *= units;
+}
 
 //Home axis (A final position, B final position, Speed)
-void g28 (float a, float b, float s) {}
+void g28 (float a, float b, float s) {
+
+  // g0(a_pos+1,NAN,s,0);
+
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  if(a==a) {
+    next.jobs[0] = from_speed_dist(s*units, 1, FEED_STEPS_PER_MM);
+    next.jobs[0].end.ty = STALL_GUARD;
+    next.jobs[0].end.cond = FEED_SGT;
+  }
+
+  if(b==b) {
+    next.jobs[1] = from_speed_dist(s*units, 1, CLAMP_STEPS_PER_MM);
+    next.jobs[1].end.ty = STALL_GUARD;
+    next.jobs[1].end.cond = CLAMP_SGT;
+  }
+
+  queue_jobs(next);
+
+  a_pos = b_pos = 0;
+
+  g0(a,b,s,0);
+
+}
 
 //Feed until skip (A axis enable, B axis enable, Speed)
 void g31 (bool a, bool b, float s) {}
@@ -50,10 +161,10 @@ void g90() {}
 void g91() {}
 
 //Feedrate per minute
-void g94() {}
+void g94() {feed_mode = FEEDRATE_TIME;}
 
 //Feedrate per revolution
-void g95() {}
+void g95() {feed_mode = FEEDRATE_DIST;}
 
 //M codes define miscellaneous commands
 
@@ -76,6 +187,7 @@ void m17() {
     next.jobs[i] = NOOP_JOB;
     next.jobs[i].en = SET;
   }
+  next.jobs[3] = NOOP_JOB;
   Serial.println("Steppers Enabled");
   queue_jobs(next);
 }
@@ -111,31 +223,8 @@ void m18() {
     next.jobs[i] = NOOP_JOB;
     next.jobs[i].en = UNSET;
   }
-  Serial.println("Steppers Disabled");
-  queue_jobs(next);
-}
-
-void m18(bool a, bool b, bool c) {
-  Jobs next;
-  if(a){
-    next.jobs[0] = NOOP_JOB;
-    next.jobs[0].en = UNSET;
-  }
-  if(a){
-    next.jobs[1] = NOOP_JOB;
-    next.jobs[1].en = UNSET;
-  }
-  if(a){
-    next.jobs[2] = NOOP_JOB;
-    next.jobs[2].en = UNSET;
-  }
   next.jobs[3] = NOOP_JOB;
-
-  Serial.print("Steppers ");
-  Serial.print((a ?"A " : ""));
-  Serial.print((b ?"B " : ""));
-    Serial.print((c ?"C " : ""));
-  Serial.println("Disabled");
+  Serial.println("Steppers Enabled");
   queue_jobs(next);
 }
 
