@@ -86,6 +86,18 @@ inline void do_job(byte id) {
 
 }
 
+inline void trigger_sg(byte id) {
+  current_jobs[id].running = false;
+  *timers[id].tccrnb = 0;
+  *timers[id].timsk = 0;
+  switch(id) {
+    case 0: detachInterrupt(digitalPinToInterrupt(SG_FEED)); break;
+    case 1: detachInterrupt(digitalPinToInterrupt(SG_CLAMP)); break;
+  }
+}
+
+void sg_0(void) {trigger_sg(0);}
+void sg_1(void) {trigger_sg(1);}
 
 ISR(TIMER1_COMPA_vect) { do_job(3); }
 ISR(TIMER3_COMPA_vect) { do_job(0); }
@@ -112,6 +124,16 @@ bool job_done() {
 bool busy() { return job_queue.count()>0 || job_done();}
 
 void machine_loop() {
+
+  static int last_time = millis();
+
+  int time = millis();
+  if(time-last_time>1000) {
+    Serial.print(clamp.sg_result());
+    Serial.print(" ");
+    Serial.println(feed.sg_result());
+    last_time = time;
+  }
 
   //if the last command ended, advance the queue
   if(job_done()) {
@@ -151,9 +173,16 @@ void machine_loop() {
             case STALL_GUARD:
               current_jobs[i].running = true;
               switch(i) {
-                case 0: feed.sgt(end.cond); break;
-                case 1: clamp.sgt(end.cond); break;
+                case 0:
+                  feed.sgt(end.cond);
+                  attachInterrupt(digitalPinToInterrupt(SG_FEED), sg_0, RISING);
+                  break;
+                case 1:
+                  clamp.sgt(end.cond);
+                  attachInterrupt(digitalPinToInterrupt(SG_CLAMP), sg_1, RISING);
+                  break;
               }
+              break;
             case FOREVER: current_jobs[i].running = true; break;
             case IMMEDIATE: break;
           }
@@ -209,6 +238,7 @@ void machine_init() {
   clamp.microsteps(CLAMP_MS);
   clamp.TCOOLTHRS(0xFFFFF);
   clamp.sgt(CLAMP_SGT);
+  clamp.diag0_stall(true);
 
   feed.begin();
   feed.rms_current(FEED_CURRENT);
@@ -216,6 +246,7 @@ void machine_init() {
   feed.microsteps(FEED_MS);
   feed.TCOOLTHRS(0xFFFFF);
   feed.sgt(FEED_SGT);
+  feed.diag0_stall(true);
 
   pinMode(EN_DRIVE, OUTPUT);
   pinMode(STEP_DRIVE, OUTPUT);
