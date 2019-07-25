@@ -3,6 +3,11 @@
 #include "gcodes.h"
 #include "machine.h"
 
+#define DEFAULT_SPEED 1
+#define FEED_STEPS_PER_MM (FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define DRIVE_STEPS_PER_REV ((GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
+
 //STATE
 
 enum {FEEDRATE_TIME,FEEDRATE_DIST} feed_mode = FEEDRATE_DIST;
@@ -13,6 +18,26 @@ float units = 1;//millimeters
 float a_pos = 0;
 float b_pos = 0;
 
+Job from_speed_dist(float s, float d, const float steps_per_mm) {
+  Job j = NOOP_JOB;
+
+  if(d==d && d!=0) {
+
+    s = s==s ? abs(s) : DEFAULT_SPEED;
+
+    j.frequency = (uint16_t) (s * steps_per_mm);
+    j.dir = d<0 ? SET : UNSET;
+
+    j.end.ty = COUNT;
+    j.end.cond = (uint16_t) ((abs(d) / s) * j.frequency);
+
+  }
+
+  return j;
+}
+
+
+
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis , B axis position, Speed, Feedrate)
@@ -20,49 +45,17 @@ void g0 (float a, float b, float s, float f) {
 
   Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
 
-  float turn_speed;
+  next.jobs[0] = from_speed_dist(s*units, a-a_pos, FEED_STEPS_PER_MM);
+  next.jobs[1] = from_speed_dist(s*units, b-b_pos, CLAMP_STEPS_PER_MM);
+
   switch(feed_mode) {
-    case FEEDRATE_TIME: turn_speed = f*units; break;
-    case FEEDRATE_DIST: turn_speed = s*f; break;
+    case FEEDRATE_TIME:
+      next.jobs[2] = from_speed_dist(f, f*abs((a-a_pos)/s), DRIVE_STEPS_PER_REV);
+      break;
+    case FEEDRATE_DIST:
+      next.jobs[2] = from_speed_dist(s*f, abs(a-a_pos)*f, DRIVE_STEPS_PER_REV);
+      break;
   }
-
-  s = abs(s*units);
-
-  next.jobs[0].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1:2));
-  next.jobs[1].frequency = (uint16_t) ((s / ROD_MM_PER_TURN) * CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1:2));
-  next.jobs[2].frequency = (uint16_t) (((turn_speed * GEAR_1_TEETH) / GEAR_2_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1:2));
-
-  float da = a - a_pos;
-  float db = b - b_pos;
-
-  if(da < 0) {
-    next.jobs[0].dir = SET;
-    da *= -1;
-  } else if(da>0) {
-    next.jobs[0].dir = UNSET;
-  }
-
-  if(db < 0) {
-    next.jobs[1].dir = SET;
-    db *= -1;
-  } else if(db>0) {
-    next.jobs[1].dir = UNSET;
-  }
-
-  if(f < 0) {
-    next.jobs[2].dir = SET;
-    f *= -1;
-  } else if(f>0) {
-    next.jobs[2].dir = UNSET;
-  }
-
-  next.jobs[0].end.ty = da==0 || a!=a ? IMMEDIATE : COUNT;
-  next.jobs[1].end.ty = db==0 || b!=b ? IMMEDIATE : COUNT;
-  next.jobs[2].end.ty = f==0 || da==0 || a!=a || f!=f ? IMMEDIATE : COUNT;
-
-  next.jobs[0].end.cond = (uint32_t) ((da / s) * next.jobs[0].frequency);
-  next.jobs[1].end.cond = (uint32_t) ((db / s) * next.jobs[1].frequency);
-  next.jobs[2].end.cond = (uint32_t) ((da / s) * next.jobs[2].frequency);
 
   if(a==a) a_pos = a;
   if(b==b) b_pos = b;
