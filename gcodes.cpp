@@ -254,6 +254,30 @@ void m17() {
   queue_jobs(next);
 }
 
+void m17(bool a, bool b, bool c){
+  Jobs next;
+  if(a){
+    next.jobs[0] = NOOP_JOB;
+    next.jobs[0].en = SET;
+  }
+  if(a){
+    next.jobs[1] = NOOP_JOB;
+    next.jobs[1].en = SET;
+  }
+  if(a){
+    next.jobs[2] = NOOP_JOB;
+    next.jobs[2].en = SET;
+  }
+    next.jobs[3] = NOOP_JOB;
+
+  Serial.print("Steppers ");
+  Serial.print((a ?"A " : ""));
+  Serial.print((b ?"B " : ""));
+  Serial.print((c ?"C " : ""));
+  Serial.println("Enabled");
+  queue_jobs(next);
+}
+
 //Disable steppers
 void m18() {
   Jobs next;
