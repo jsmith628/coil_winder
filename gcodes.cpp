@@ -260,11 +260,11 @@ void m17(bool a, bool b, bool c){
     next.jobs[0] = NOOP_JOB;
     next.jobs[0].en = SET;
   }
-  if(a){
+  if(b){
     next.jobs[1] = NOOP_JOB;
     next.jobs[1].en = SET;
   }
-  if(a){
+  if(c){
     next.jobs[2] = NOOP_JOB;
     next.jobs[2].en = SET;
   }
