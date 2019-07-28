@@ -227,17 +227,15 @@ void machine_loop() {
             *timers[i].tccrnb |= prescaling;
             *timers[i].ocra = (uint16_t) period;
 
-            Serial.print(next[i].frequency);
-            Serial.print(" ");
-            Serial.print(p);
-            Serial.print(" ");
-            Serial.print(*timers[i].ocra);
-            Serial.print(" ");
-            Serial.print(*timers[i].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.println(end.cond);
-            // *timers[i].ocrah = (byte) (period >> 8);
-            // *timers[i].ocral = (byte) (period && 0xFF);
+            // Serial.print(next[i].frequency);
+            // Serial.print(" ");
+            // Serial.print(p);
+            // Serial.print(" ");
+            // Serial.print(*timers[i].ocra);
+            // Serial.print(" ");
+            // Serial.print(*timers[i].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
