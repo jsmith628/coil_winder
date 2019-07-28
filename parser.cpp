@@ -174,8 +174,8 @@ void parse(String g){
     while (x < g.length()){
       if (isAlpha(g.charAt(x))){
         if(g.charAt(x) == 'G' || g.charAt(x) == 'M'){
-          interpret_gcode(c)
-          parse(g.substring(x, g.length())));
+          interpret_gcode(c);
+          parse(g.substring(x, g.length()));
           return;
         }
           modifier m;
@@ -225,9 +225,8 @@ void parse(String g){
 
 bool read_command(){
 
-        String input = Serial.readString();
-        com = parse(input);
-        interpret_gcode(com);
+    String input = Serial.readString();
+    parse(input);
 
 }
 
