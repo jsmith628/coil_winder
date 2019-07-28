@@ -6,7 +6,7 @@
 #define DEFAULT_SPEED 1
 #define FEED_STEPS_PER_MM (FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
 #define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
-#define DRIVE_STEPS_PER_REV ((GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
+#define DRIVE_STEPS_PER_REV (((float) GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
 
 //STATE
 
@@ -17,6 +17,11 @@ float units = 1;//millimeters
 //current axis position
 float a_pos = 0;
 float b_pos = 0;
+
+//coordinate system
+enum {MACHINE,LOCAL,INCREMENTAL} coords = MACHINE;
+float a_zero = 0;
+float b_zero = 0;
 
 Job from_speed_dist(float s, float d, const float steps_per_mm) {
   Job j = NOOP_JOB;
@@ -29,13 +34,42 @@ Job from_speed_dist(float s, float d, const float steps_per_mm) {
     j.dir = d<0 ? SET : UNSET;
 
     j.end.ty = COUNT;
-    j.end.cond = (uint16_t) ((abs(d) / s) * j.frequency);
+    j.end.cond = (uint16_t) (abs(d) * steps_per_mm);
 
   }
 
   return j;
 }
 
+void set_units(float dist) {
+  a_pos /= units;
+  b_pos /= units;
+  a_zero /= units;
+  b_zero /= units;
+  units = dist;
+  a_pos *= units;
+  b_pos *= units;
+  a_zero *= units;
+  b_zero *= units;
+}
+
+void update_position(float a, float b) {
+  if(a==a) {
+    if(coords==INCREMENTAL) {
+      a_pos += a;
+    } else {
+      a_pos = a;
+    }
+  }
+
+  if(b==b) {
+    if(coords==INCREMENTAL) {
+      b_pos += b;
+    } else {
+      b_pos = b;
+    }
+  }
+}
 
 
 //G codes define movement and interpretation commands
@@ -45,20 +79,24 @@ void g0 (float a, float b, float s, float f) {
 
   Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
 
-  next.jobs[0] = from_speed_dist(s*units, (a-a_pos)*units, FEED_STEPS_PER_MM);
-  next.jobs[1] = from_speed_dist(s*units, (b-b_pos)*units, CLAMP_STEPS_PER_MM);
+  bool incr = (coords==INCREMENTAL);
+
+  float da = incr ? a : (a-a_pos);
+  float db = incr ? b : (b-b_pos);
+
+  next.jobs[0] = from_speed_dist(s*units, da*units, FEED_STEPS_PER_MM);
+  next.jobs[1] = from_speed_dist(s*units, db*units, CLAMP_STEPS_PER_MM);
 
   switch(feed_mode) {
     case FEEDRATE_TIME:
-      next.jobs[2] = from_speed_dist(f, f*abs((a-a_pos)/s), DRIVE_STEPS_PER_REV);
+      next.jobs[2] = from_speed_dist(f, f*abs(da/s), DRIVE_STEPS_PER_REV);
       break;
     case FEEDRATE_DIST:
-      next.jobs[2] = from_speed_dist(s*f, abs(a-a_pos)*f, DRIVE_STEPS_PER_REV);
+      next.jobs[2] = from_speed_dist(s*f, abs(da)*f, DRIVE_STEPS_PER_REV);
       break;
   }
 
-  if(a==a) a_pos = a;
-  if(b==b) b_pos = b;
+  update_position(a,b);
 
   queue_jobs(next);
 
@@ -68,8 +106,10 @@ void g0 (float a, float b, float s, float f) {
 void g1 (float a, float b, float s, float f) {
   Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
 
-  float da = a-a_pos;
-  float db = b-b_pos;
+  bool incr = (coords==INCREMENTAL);
+
+  float da = incr ? a : (a-a_pos);
+  float db = incr ? b : (b-b_pos);
   float d = max(da,db);
   float t = d/s;
 
@@ -85,8 +125,7 @@ void g1 (float a, float b, float s, float f) {
       break;
   }
 
-  if(a==a) a_pos = a;
-  if(b==b) b_pos = b;
+  update_position(a,b);
 
   queue_jobs(next);
 }
@@ -95,27 +134,15 @@ void g1 (float a, float b, float s, float f) {
 void g4 (float p, float s) {}
 
 //Programming in inches
-void g20 () {
-  a_pos /= units;
-  b_pos /= units;
-  units = 25.4;
-  a_pos *= units;
-  b_pos *= units;
-}
+void g20 () { set_units(25.4); }
 
 //Programming in millimeters
-void g21 () {
-  a_pos /= units;
-  b_pos /= units;
-  units = 1.0;
-  a_pos *= units;
-  b_pos *= units;
-}
+void g21 () { set_units(1.0); }
 
 //Home axis (A final position, B final position, Speed)
 void g28 (float a, float b, float s) {
 
-  // g0(a_pos+1,NAN,s,0);
+  if(s!=s) s=6;
 
   Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
 
@@ -149,16 +176,51 @@ void g32 (float a, float b, float s, float f) {}
 void g50 (float s) {}
 
 //Local coordinates, defines program zero to a new location (A position 0, B position 0)
-void g52 (float a, float b) {}
+void g52 (float a, float b) {
+  if(a==a){
+    if(coords==LOCAL) a_pos += a_zero;
+    a_zero = a;
+    a_pos -= a_zero;
+  }
+  if(b==b) {
+    if(coords==LOCAL) b_pos += b_zero;
+    b_zero = b;
+    b_pos -= b_zero;
+  }
+  coords = LOCAL;
+  Serial.print("Local Coords: a0=");
+  Serial.print(a_zero);
+  Serial.print(" b0=");
+  Serial.print(b_zero);
+  Serial.print(" a=");
+  Serial.print(a_pos);
+  Serial.print(" b=");
+  Serial.println(b_pos);
+}
 
 //Repetitive threading cycle (A axis position, B axis position, Spindle speed, Feedrate, Repititions, Symmetrical)
 void g76 (float a, float b, float s, float f, int r, bool p) {}
 
 //Absolute positioning (position defined from machine zero)
-void g90() {}
+void g90() {
+  a_pos += a_zero;
+  b_pos += b_zero;
+  coords = MACHINE;
+  Serial.print("Absolute Coords: a0=");
+  Serial.print(a_zero);
+  Serial.print(" b0=");
+  Serial.print(b_zero);
+  Serial.print(" a=");
+  Serial.print(a_pos);
+  Serial.print(" b=");
+  Serial.println(b_pos);
+}
 
 //Incremental positioning (position defined relative to previous position)
-void g91() {}
+void g91() {
+  coords = INCREMENTAL;
+  Serial.println("Incremental Coords");
+}
 
 //Feedrate per minute
 void g94() {feed_mode = FEEDRATE_TIME;}
@@ -200,7 +262,7 @@ void m18() {
     next.jobs[i].en = UNSET;
   }
   next.jobs[3] = NOOP_JOB;
-  Serial.println("Steppers Enabled");
+  Serial.println("Steppers Disabled");
   queue_jobs(next);
 }
 
