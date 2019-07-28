@@ -148,7 +148,7 @@ void interpret_gcode(command c){
 }
 
 
-command parse(String g){
+void parse(String g){
 
   command c;
   for (int x = 0; x < MODIFIERLENGTH; x++){
@@ -174,8 +174,9 @@ command parse(String g){
     while (x < g.length()){
       if (isAlpha(g.charAt(x))){
         if(g.charAt(x) == 'G' || g.charAt(x) == 'M'){
-          interpret_gcode(parse(g.substring(x, g.length())));
-          break;
+          interpret_gcode(c)
+          parse(g.substring(x, g.length())));
+          return;
         }
           modifier m;
           m.c = (char)g.charAt(x);
@@ -213,11 +214,11 @@ command parse(String g){
       }
     }
 
-    return c;
+    interpret_gcode(c);
   } else {
       c.type = 0;
       c.number = 0;
-      return c;
+      interpret_gcode(c);
   }
 }
 
