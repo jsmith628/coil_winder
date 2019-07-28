@@ -39,6 +39,7 @@ typedef struct {
     volatile uint8_t * tccrna;
     volatile uint8_t * tccrnb;
     volatile uint16_t * tcnt;
+    volatile uint16_t * ocra;
     volatile uint8_t * ocrah;
     volatile uint8_t * ocral;
     volatile uint8_t * timsk;
@@ -46,10 +47,10 @@ typedef struct {
 
 //all of the 16bit timers on the ATMEGA2560
 Timer timers[4] = {
-  {&TCCR3A, &TCCR3B, &TCNT3, &OCR3AH, &OCR3AL, &TIMSK3},
-  {&TCCR4A, &TCCR4B, &TCNT4, &OCR4AH, &OCR4AL, &TIMSK4},
-  {&TCCR5A, &TCCR5B, &TCNT5, &OCR5AH, &OCR5AL, &TIMSK5},
-  {&TCCR1A, &TCCR1A, &TCNT1, &OCR1AH, &OCR1AL, &TIMSK1},
+  {&TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3AH, &OCR3AL, &TIMSK3},
+  {&TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4AH, &OCR4AL, &TIMSK4},
+  {&TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5AH, &OCR5AL, &TIMSK5},
+  {&TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1AH, &OCR1AL, &TIMSK1},
 };
 
 struct JobProgress {
@@ -125,15 +126,15 @@ bool busy() { return job_queue.count()>0 || job_done();}
 
 void machine_loop() {
 
-  static int last_time = millis();
-
-  int time = millis();
-  if(time-last_time>1000) {
-    Serial.print(clamp.sg_result());
-    Serial.print(" ");
-    Serial.println(feed.sg_result());
-    last_time = time;
-  }
+  // static int last_time = millis();
+  //
+  // int time = millis();
+  // if(time-last_time>1000) {
+  //   Serial.print(clamp.sg_result());
+  //   Serial.print(" ");
+  //   Serial.println(feed.sg_result());
+  //   last_time = time;
+  // }
 
   //if the last command ended, advance the queue
   if(job_done()) {
@@ -199,12 +200,44 @@ void machine_loop() {
           *timers[i].tccrna = 0;
 
           if(current_jobs[i].running) {
-            *timers[i].tccrnb = 1 | (1<<3); //clear the timer when it reaches OCRnA
+            *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
             *timers[i].timsk = 2; //enable interrupt of OCRnA
-            uint16_t period = (AVR_CLK_FREQ / next[i].frequency);//get the timer period
+            uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) next[i].frequency;//get the timer period
+            uint32_t p = period;
 
-            *timers[i].ocrah = (byte) (period >> 8);
-            *timers[i].ocral = (byte) (period && 0xFF);
+            byte prescaling = 1;
+
+            while((period & 0xFFFF0000)&&prescaling<0b101) {
+              if(prescaling<=2){
+                if((period & 0b111)>=4){
+                  period = (period>>3)+1;
+                }else {
+                  period = period>>3;
+                }
+              } else {
+                if((period & 0b11)>=2){
+                  period = (period>>2) + 1;
+                } else {
+                  period = period>>2;
+                }
+              }
+              prescaling++;
+            }
+
+            *timers[i].tccrnb |= prescaling;
+            *timers[i].ocra = (uint16_t) period;
+
+            Serial.print(next[i].frequency);
+            Serial.print(" ");
+            Serial.print(p);
+            Serial.print(" ");
+            Serial.print(*timers[i].ocra);
+            Serial.print(" ");
+            Serial.print(*timers[i].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.println(end.cond);
+            // *timers[i].ocrah = (byte) (period >> 8);
+            // *timers[i].ocral = (byte) (period && 0xFF);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
@@ -212,14 +245,6 @@ void machine_loop() {
             *timers[i].ocrah = 0;
             *timers[i].ocral = 0;
           }
-
-
-          // Serial.print(next[i].frequency);
-          // Serial.print(" ");
-          // Serial.print(AVR_CLK_FREQ / next[i].frequency, HEX);
-          // Serial.print(" ");
-          // Serial.print(*timers[i].ocrah, HEX);
-          // Serial.println(*timers[i].ocral, HEX);
 
         }
 
