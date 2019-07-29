@@ -50,7 +50,6 @@
 #define SUBJOBS_PER_JOB 4
 #define NOOP_JOB {KEEP, KEEP, 0, {IMMEDIATE, 0} }
 
-#include "timings.h"
 #include "queue.h"
 
 void step_clamp();
