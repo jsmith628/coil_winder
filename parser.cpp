@@ -38,7 +38,7 @@ void interpret_gcode(command c){
         g1(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
         break;
       case 4:
-        g4(c.modifiers[6].f, c.modifiers[2].f);
+        g4(c.modifiers[4].f, c.modifiers[2].f);
         break;
       case 20:
         g20();

@@ -8,6 +8,8 @@
 #define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
 #define DRIVE_STEPS_PER_REV (((float) GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
 
+#define DWELL_MS_PRECISION 1
+
 //STATE
 
 enum {FEEDRATE_TIME,FEEDRATE_DIST} feed_mode = FEEDRATE_DIST;
@@ -131,7 +133,22 @@ void g1 (float a, float b, float s, float f) {
 }
 
 //Dwell (P (millis) | S (seconds) )
-void g4 (float p, float s) {}
+void g4 (float p, float s) {
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  if(p==p) {
+    if(s==s) p += s*1000.0;
+    next.jobs[3].frequency = AVR_CLK_FREQ / (DWELL_MS_PRECISION*1000);//microsecond precision
+    next.jobs[3].end.ty = COUNT;
+    next.jobs[3].end.cond = (uint16_t) (p * DWELL_MS_PRECISION);
+  } else if(s==s) {
+    next.jobs[3].frequency = AVR_CLK_FREQ / (DWELL_MS_PRECISION*1000);//microsecond precision
+    next.jobs[3].end.ty = COUNT;
+    next.jobs[3].end.cond = (uint16_t) (s * DWELL_MS_PRECISION*1000);
+  }
+
+  queue_jobs(next);
+}
 
 //Programming in inches
 void g20 () { set_units(25.4); }
