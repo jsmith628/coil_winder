@@ -161,14 +161,14 @@ void parse(size_t s, char* buf){
   // Evaluate command
 
   if(*buf == 'G' || *buf == 'M'){
-    c.type = *buf++;
+    c.type = *(buf++);
     int x = 1;
     int y = 0;
+    c.number = atoi(buf);
     while (x<s && isDigit(*buf)) {
       x++;
+      buf++;
     }
-    c.number = atoi(++buf);
-    buf += ++x;
 
     // Evaluate parameters
 
@@ -182,7 +182,7 @@ void parse(size_t s, char* buf){
           return;
         }
         modifier m;
-        m.c = *buf;
+        m.c = *(buf++);
         y = ++x;
         m.f = atof(buf);
         while ((isDigit(*buf)||*buf=='.'||*buf=='-')&& y<s){

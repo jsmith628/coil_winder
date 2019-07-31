@@ -156,18 +156,16 @@ void g21 () { set_units(1.0); }
 //Home axis (A final position, B final position)
 void g28 (bool a, bool b) {
 
-  if(s!=s) s=6;
-
   Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
 
-  if(a==a) {
-    next.jobs[0] = from_speed_dist(s*units, 1, FEED_STEPS_PER_MM);
+  if(a) {
+    next.jobs[0] = from_speed_dist(6*units, 1, FEED_STEPS_PER_MM);
     next.jobs[0].end.ty = STALL_GUARD;
     next.jobs[0].end.cond = FEED_SGT;
   }
 
-  if(b==b) {
-    next.jobs[1] = from_speed_dist(s*units, 1, CLAMP_STEPS_PER_MM);
+  if(b) {
+    next.jobs[1] = from_speed_dist(6*units, 1, CLAMP_STEPS_PER_MM);
     next.jobs[1].end.ty = STALL_GUARD;
     next.jobs[1].end.cond = CLAMP_SGT;
   }
@@ -175,8 +173,6 @@ void g28 (bool a, bool b) {
   queue_jobs(next);
 
   a_pos = b_pos = 0;
-
-  g0(a,b,s,0);
 
 }
 
@@ -330,16 +326,16 @@ void m120() {}
 void m121() {}
 
 //Park (A axis position, B axis postion)
-void m125(float a, float b) {}
+void m125(float a, float b, float w) {}
 
 //Set max acceleration
-void m201();
+void m201(float s) {}
 
 //Set max feedrate (Feedrate)
 void m203(float f) {}
 
 //Set starting acceleration (A axis acceleration, B axis acceleration, Spindle acceleration)
-void m204(float a, float b, float w);
+void m204(float a, float b, float w) {}
 
 //Save settings to EEPROM
 void m500() {}
