@@ -3,11 +3,11 @@
 
 //G codes define movement and interpretation commands
 
-//Rapid move (A axis position, B axis position, Speed, Feedrate)
-void g0 (float a, float b, float s, float f);
+//Rapid move (A axis position, B axis position, Spindle rotations, Speed, Feedrate)
+void g0 (float a, float b, float w, float s, float f);
 
-//Linear interpolate (A axis position, B axis position, Speed | Feedrate)
-void g1 (float a, float b, float s, float f);
+//Linear interpolate (A axis position, B axis position, Spindle rotations, Speed, Feedrate)
+void g1 (float a, float b, float w, float s, float f);
 
 //Dwell (P (millis) | S (seconds) )
 void g4 (float p, float s);
@@ -18,29 +18,26 @@ void g20 ();
 //Programming in millimeters
 void g21 ();
 
-//Home axis (A final position, B final position, Speed)
-void g28 (float a, float b, float s);
+//Home axis (A axis enable, B axis enable)
+void g28 (bool a, bool b);
 
-//Feed until skip (A axis enable, B axis enable, Speed)
-void g31 (bool a, bool b, float s);
-
-//Single point threading, non-cycle (for cycle, use G76) (A axis position, B axis position, Spindle speed, Feedrate)
-void g32 (float a, float b, float s, float f);
+//Feed until skip (A axis enable, B axis enable)
+void g31 (int8_t a, int8_t b);
 
 //Define maximum spindle Speed (Speed)
 void g50 (float s);
 
-//Local coordinates, defines program zero to a new location (A position 0, B position 0)
-void g52 (float a, float b);
-
-//Repetitive threading cycle (A axis position, B axis position, Spindle speed, Feedrate, Repititions, Symmetrical)
-void g76 (float a, float b, float s, float f, int r, bool d);
+//Local coordinates, defines program zero to a new location (A position 0, B position 0, Spindle position 0)
+void g52 (float a, float b, float w);
 
 //Absolute positioning (position defined from machine zero)
 void g90();
 
 //Incremental positioning (position defined relative to previous position)
 void g91();
+
+//Set current position to specified value
+void g92(float a, float b, float w);
 
 //Feedrate per minute
 void g94();
@@ -53,15 +50,6 @@ void g95();
 //Unconditional stop
 void m0();
 
-//Spindle on, CW (Speed)
-void m3(float s);
-
-//Spindle on, CCW (Speed)
-void m4(float s);
-
-//Spindle stop
-void m5();
-
 //Enable steppers
 void m17();
 
@@ -70,6 +58,15 @@ void m18();
 
 //End of program, return to program top
 void m30();
+
+//Spindle absolute positioning
+void m82();
+
+//Spindle incremental positioning
+void m83();
+
+//Set axis steps per unit
+void m92(float a, float b, float w);
 
 //Subprogram call
 void m98();
@@ -84,17 +81,23 @@ void m112();
 float m114();
 void m114(bool a, bool b);
 
-//Park (A axis position, B axis postion)
-void m125(float a, float b);
-
 //Enable software endstops
 void m120();
 
 //Disable software endstops
 void m121();
 
+//Park (A axis position, B axis postion)
+void m125(float a, float b, float w);
+
+//Set max acceleration
+void m201(float s);
+
 //Set max feedrate (Feedrate)
 void m203(float f);
+
+//Set starting acceleration
+void m204(float a, float b, float w);
 
 //Save settings to EEPROM
 void m500();
