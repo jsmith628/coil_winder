@@ -215,10 +215,12 @@ void parse(String g){
     }
 
     interpret_gcode(c);
+    delete g;
   } else {
       c.type = 0;
       c.number = 0;
       interpret_gcode(c);
+      delete g;
   }
 }
 
@@ -226,8 +228,7 @@ void parse(String g){
 bool read_command(){
 
         String input = Serial.readString();
-        com = parse(input);
-        interpret_gcode(com);
+        parse(input);
 
 }
 

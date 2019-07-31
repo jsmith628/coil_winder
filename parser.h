@@ -29,7 +29,7 @@ void display_warning(String type, unsigned int specificType, String details);
 void interpret_gcode(command c);
 
 
-command parse(String g);
+void parse(String g);
 
 
 bool read_command();
