@@ -123,18 +123,18 @@ inline void do_job(byte id) {
       }
     }
 
-    byte lut = current_jobs[id].accels.current;
-    byte num = current_jobs[id].accels.num;
-
-    if(lut < num) {
-      if(--current_jobs[id].accels.time == 0) {
-        if(++current_jobs[id].accels.current < num) {
-          current_jobs[id].accels.time = current_jobs[id].accels.intervals[lut+1];
-          *timers[id].tccrnb = (*timers[id].tccrnb & ~0b111) | current_jobs[id].accels.prescaling[lut+1];
-          *timers[id].ocra = current_jobs[id].accels.periods[lut+1];
-        }
-      }
-    }
+    // byte lut = current_jobs[id].accels.current;
+    // byte num = current_jobs[id].accels.num;
+    //
+    // if(lut < num) {
+    //   if(--current_jobs[id].accels.time == 0) {
+    //     if(++current_jobs[id].accels.current < num) {
+    //       current_jobs[id].accels.time = current_jobs[id].accels.intervals[lut+1];
+    //       *timers[id].tccrnb = (*timers[id].tccrnb & ~0b111) | current_jobs[id].accels.prescaling[lut+1];
+    //       *timers[id].ocra = current_jobs[id].accels.periods[lut+1];
+    //     }
+    //   }
+    // }
 
   }
 
@@ -262,36 +262,38 @@ void machine_loop() {
             *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
             *timers[i].timsk = 2; //enable interrupt of OCRnA
 
-            const byte max = 10;
-            current_jobs[i].accels.current = 0;
-            current_jobs[i].accels.num = max;
+            // const byte max = 10;
+            // current_jobs[i].accels.current = 0;
+            // current_jobs[i].accels.num = max;
+            //
+            // uint16_t start = next[i].frequency/4;
+            // uint16_t end = next[i].frequency;
+            //
+            // float duration = 1.0;
+            //
+            // for(byte j=0; j<max; j++) {
+            //   byte prescaling = 1;
+            //   uint16_t period = get_timer_period(start + j*(end-start)/max, &prescaling, timers[i].mask);
+            //   current_jobs[i].accels.periods[j] = period;
+            //   current_jobs[i].accels.prescaling[j] = prescaling;
+            //   current_jobs[i].accels.intervals[j] = (uint16_t) ((duration * AVR_CLK_FREQ) / period);
+            // }
+            // current_jobs[i].accels.time = current_jobs[i].accels.intervals[0];
+            //
+            // *timers[i].ocra = current_jobs[i].accels.periods[0];
+            // *timers[i].tccrnb |= current_jobs[i].accels.prescaling[0];
 
-            uint16_t start = next[i].frequency/4;
-            uint16_t end = next[i].frequency;
+            byte prescaling = 1;
+            *timers[i].ocra = get_timer_period(next[i].frequency, &prescaling, timers[i].mask);
+            *timers[i].tccrnb |= prescaling;
 
-            float duration = 1.0;
-
-            for(byte j=0; j<max; j++) {
-              byte prescaling = 1;
-              uint16_t period = get_timer_period(start + j*(end-start)/max, &prescaling, timers[i].mask);
-              current_jobs[i].accels.periods[j] = period;
-              current_jobs[i].accels.prescaling[j] = prescaling;
-              current_jobs[i].accels.intervals[j] = (uint16_t) ((duration * AVR_CLK_FREQ) / period);
-            }
-            current_jobs[i].accels.time = current_jobs[i].accels.intervals[0];
-
-            *timers[i].ocra = current_jobs[i].accels.periods[0];
-            *timers[i].tccrnb |= current_jobs[i].accels.prescaling[0];
-
-            // Serial.print(next[i].frequency);
-            // Serial.print(" ");
-            // Serial.print(p);
-            // Serial.print(" ");
-            // Serial.print(*timers[i].ocra);
-            // Serial.print(" ");
-            // Serial.print(*timers[i].tccrnb,BIN);
-            // Serial.print(" ");
-            // Serial.println(end.cond);
+            Serial.print(next[i].frequency);
+            Serial.print(" ");
+            Serial.print(*timers[i].ocra);
+            Serial.print(" ");
+            Serial.print(*timers[i].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
