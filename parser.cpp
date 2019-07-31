@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 command com;
+char buffer[BUFFERLENGTH];
 
 void display_warning(String type){
   Serial.print("Warning: ");
@@ -25,20 +26,19 @@ void display_warning(String type, unsigned int specificType, String details){
 
 
 void interpret_gcode(command c){
-  //A, B, S, F, D/P, R
   if(c.type == 'G'){
     switch (c.number) {
       default:
         display_warning("G",c.number," is not a valid G command.");
         break;
       case 0:
-        g0(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
+        g0(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f, c.modifiers[S].f, c.modifiers[FR].f);
         break;
       case 1:
-        g1(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
+        g1(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f, c.modifiers[S].f, c.modifiers[FR].f);
         break;
       case 4:
-        g4(c.modifiers[4].f, c.modifiers[2].f);
+        g4(c.modifiers[P].f, c.modifiers[S].f);
         break;
       case 20:
         g20();
@@ -47,28 +47,25 @@ void interpret_gcode(command c){
         g21();
         break;
       case 28:
-        g28(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f);
+        g28((c.modifiers[A].f != 0), (c.modifiers[B].f != 0));
         break;
       case 31:
-        g31((c.modifiers[0].f!=0),(c.modifiers[1].f!=0),c.modifiers[2].f);
-        break;
-      case 32:
-        g32(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
+        g31((int8_t)c.modifiers[A].f,(int8_t)(c.modifiers[B].f!=0));
         break;
       case 50:
-        g50(c.modifiers[2].f);
+        g50(c.modifiers[S].f);
         break;
       case 52:
-        g52(c.modifiers[0].f, c.modifiers[1].f);
-        break;
-      case 76:
-        g76(c.modifiers[0].f,c.modifiers[1].f,c.modifiers[2].f,c.modifiers[3].f,(int)c.modifiers[0].f,(c.modifiers[5].f!=0));
+        g52(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
       case 90:
         g90();
         break;
       case 91:
         g91();
+        break;
+      case 92:
+        g92(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
       case 94:
         g94();
@@ -85,15 +82,6 @@ void interpret_gcode(command c){
       case 0:
         m0();
         break;
-      case 3:
-        m3(c.modifiers[2].f);
-        break;
-      case 4:
-        m4(c.modifiers[2].f);
-        break;
-      case 5:
-        m5();
-        break;
       case 17:
         m17();
         break;
@@ -102,6 +90,15 @@ void interpret_gcode(command c){
         break;
       case 30:
         m30();
+        break;
+      case 82:
+        m82();
+        break;
+      case 83:
+        m83();
+        break;
+      case 92:
+        m92(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
       case 98:
         m98();
@@ -113,14 +110,11 @@ void interpret_gcode(command c){
         m112();
         break;
       case 114:
-          if((c.modifiers[0].c != 0)||(c.modifiers[1].c != 0)){
-            m114((c.modifiers[0].f != 0), (c.modifiers[0].f != 0));
+          if((c.modifiers[A].c != 0)||(c.modifiers[B].c != 0)){
+            m114((c.modifiers[A].f != 0), (c.modifiers[B].f != 0));
           }else{
             m114();
           }
-        break;
-      case 125:
-        m125(c.modifiers[0].f, c.modifiers[1].f);
         break;
       case 120:
         m120();
@@ -128,8 +122,17 @@ void interpret_gcode(command c){
       case 121:
         m121();
         break;
+      case 125:
+        m125(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
+        break;
+      case 201:
+        m201(c.modifiers[S].f);
+        break;
       case 203:
-        m203(c.modifiers[3].f);
+        m203(c.modifiers[FR].f);
+        break;
+      case 204:
+        m204(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
       case 500:
         m500();
@@ -148,92 +151,85 @@ void interpret_gcode(command c){
 }
 
 
-void parse(String g){
+void parse(size_t s, char* buf){
 
   command c;
   for (int x = 0; x < MODIFIERLENGTH; x++){
       c.modifiers[x] = {0,NAN};
   }
-  g.trim();
 
   // Evaluate command
 
-  if(g.charAt(0) == 'G' || g.charAt(0) == 'M'){
-    c.type = g.charAt(0);
+  if(*buf == 'G' || *buf == 'M'){
+    c.type = *buf++;
     int x = 1;
     int y = 0;
-    while (x<g.length()&&isDigit(g.charAt(x))){
+    while (x<s && isDigit(*buf)) {
       x++;
     }
-    c.number = (byte)g.substring(1, x).toInt();
+    c.number = atoi(++buf);
+    buf += ++x;
 
     // Evaluate parameters
 
     //A, B, S, F, D/P, R
 
-    while (x < g.length()){
-      if (isAlpha(g.charAt(x))){
-        if(g.charAt(x) == 'G' || g.charAt(x) == 'M'){
+    while (x < s){
+      if (isAlpha(*buf)){
+        if(*buf == 'G' || *buf == 'M'){
           interpret_gcode(c);
-          parse(g.substring(x, g.length()));
+          parse(s-x, buf);
           return;
         }
-          modifier m;
-          m.c = (char)g.charAt(x);
-          y = ++x;
-          while ((isDigit(g.charAt(y))||g.charAt(y)=='.'||g.charAt(y)=='-')&& y<g.length()){
-            y++;
-          }
-          m.f = g.substring(x, y).toFloat();
-          switch (m.c) {
-            case 'A':
-              c.modifiers[0] = m;
-              break;
-            case 'B':
-              c.modifiers[1] = m;
-              break;
-            case 'S':
-              c.modifiers[2] = m;
-              break;
-            case 'F':
-              c.modifiers[3] = m;
-              break;
-            case 'D':
-              c.modifiers[4] = m;
-              break;
-            case 'R':
-              c.modifiers[5] = m;
-              break;
-            case 'P':
-              c.modifiers[4] = m;
-              break;
+        modifier m;
+        m.c = *buf;
+        y = ++x;
+        m.f = atof(buf);
+        while ((isDigit(*buf)||*buf=='.'||*buf=='-')&& y<s){
+           y++;
+           buf++;
+        }
+        switch (m.c) {
+          case 'A':
+            c.modifiers[A] = m;
+            break;
+          case 'B':
+            c.modifiers[B] = m;
+            break;
+          case 'W':
+            c.modifiers[W] = m;
+            break;
+          case 'S':
+            c.modifiers[S] = m;
+            break;
+          case 'F':
+            c.modifiers[FR] = m;
+            break;
+          case 'P':
+            c.modifiers[P] = m;
+            break;
           }
           x = y;
       }else{
         x++;
+        buf++;
       }
     }
 
     interpret_gcode(c);
-    delete g;
+
   } else {
       c.type = 0;
       c.number = 0;
       interpret_gcode(c);
-      delete g;
   }
 }
 
 
 bool read_command(){
 
-<<<<<<< HEAD
-        String input = Serial.readString();
-        parse(input);
-=======
-    String input = Serial.readString();
-    parse(input);
->>>>>>> testing
+
+    parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
 
 }
 

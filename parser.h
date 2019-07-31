@@ -4,6 +4,13 @@
 #include <WString.h>
 
 #define MODIFIERLENGTH 6
+#define BUFFERLENGTH 60
+#define A 0
+#define B 1
+#define W 2
+#define S 3
+#define FR 4
+#define P 5
 
 typedef struct {
   char c;
