@@ -56,13 +56,10 @@ Timer timers[4] = {
   // {8, 0xFFFFFF00, &TCCR2A, &TCCR2A, &TCNT2, &OCR2A, &OCR2B, NULL, &TIMSK2},
 };
 
-inline void set_timer_frequency(byte id, uint16_t freq) {
-  *timers[id].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
-  *timers[id].timsk = 2; //enable interrupt of OCRnA
+uint16_t get_timer_period(uint16_t freq, byte* pre, const uint32_t mask) {
   uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) freq;//get the timer period
   byte prescaling = 1;
 
-  uint32_t mask = timers[id].mask;
   while((period & mask)&&prescaling<0b101) {
     if(prescaling<=2){
       if((period & 0b111)>=4){
@@ -80,14 +77,25 @@ inline void set_timer_frequency(byte id, uint16_t freq) {
     prescaling++;
   }
 
-  *timers[id].tccrnb |= prescaling;
-  *timers[id].ocra = (uint16_t) period;
+  *pre = prescaling;
+  return (uint16_t) period;
 }
+
+#define LUT_LENGTH 16
+
+typedef struct {
+  byte current = 0, num = 0;
+  byte prescaling[LUT_LENGTH];
+  uint16_t periods[LUT_LENGTH];
+  uint16_t time = 0;
+  uint16_t intervals[LUT_LENGTH];
+} AccelsLUT;
 
 
 struct JobProgress {
   volatile bool running = false;
   volatile u32 remaining = 0;
+  volatile AccelsLUT accels;
   volatile EndConditionType end;
 } current_jobs[SUBJOBS_PER_JOB];
 
@@ -112,6 +120,19 @@ inline void do_job(byte id) {
         current_jobs[id].running = false;
         *timers[id].tccrnb = 0; //if we're done we don't need to run this interrupt again
         *timers[id].timsk = 0; //if we're done we don't need to run this interrupt again
+      }
+    }
+
+    byte lut = current_jobs[id].accels.current;
+    byte num = current_jobs[id].accels.num;
+
+    if(lut < num) {
+      if(--current_jobs[id].accels.time == 0) {
+        if(++current_jobs[id].accels.current < num) {
+          current_jobs[id].accels.time = current_jobs[id].accels.intervals[lut+1];
+          *timers[id].tccrnb = (*timers[id].tccrnb & ~0b111) | current_jobs[id].accels.prescaling[lut+1];
+          *timers[id].ocra = current_jobs[id].accels.periods[lut+1];
+        }
       }
     }
 
@@ -238,7 +259,29 @@ void machine_loop() {
           *timers[i].tccrna = 0;
 
           if(current_jobs[i].running) {
-            set_timer_frequency(i, next[i].frequency);
+            *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
+            *timers[i].timsk = 2; //enable interrupt of OCRnA
+
+            const byte max = 10;
+            current_jobs[i].accels.current = 0;
+            current_jobs[i].accels.num = max;
+
+            uint16_t start = next[i].frequency/4;
+            uint16_t end = next[i].frequency;
+
+            float duration = 1.0;
+
+            for(byte j=0; j<max; j++) {
+              byte prescaling = 1;
+              uint16_t period = get_timer_period(start + j*(end-start)/max, &prescaling, timers[i].mask);
+              current_jobs[i].accels.periods[j] = period;
+              current_jobs[i].accels.prescaling[j] = prescaling;
+              current_jobs[i].accels.intervals[j] = (uint16_t) ((duration * AVR_CLK_FREQ) / period);
+            }
+            current_jobs[i].accels.time = current_jobs[i].accels.intervals[0];
+
+            *timers[i].ocra = current_jobs[i].accels.periods[0];
+            *timers[i].tccrnb |= current_jobs[i].accels.prescaling[0];
 
             // Serial.print(next[i].frequency);
             // Serial.print(" ");
