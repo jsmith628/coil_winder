@@ -56,6 +56,35 @@ Timer timers[4] = {
   // {8, 0xFFFFFF00, &TCCR2A, &TCCR2A, &TCNT2, &OCR2A, &OCR2B, NULL, &TIMSK2},
 };
 
+inline void set_timer_frequency(byte id, uint16_t freq) {
+  *timers[id].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
+  *timers[id].timsk = 2; //enable interrupt of OCRnA
+  uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) freq;//get the timer period
+  byte prescaling = 1;
+
+  uint32_t mask = timers[id].mask;
+  while((period & mask)&&prescaling<0b101) {
+    if(prescaling<=2){
+      if((period & 0b111)>=4){
+        period = (period>>3)+1;
+      }else {
+        period = period>>3;
+      }
+    } else {
+      if((period & 0b11)>=2){
+        period = (period>>2) + 1;
+      } else {
+        period = period>>2;
+      }
+    }
+    prescaling++;
+  }
+
+  *timers[id].tccrnb |= prescaling;
+  *timers[id].ocra = (uint16_t) period;
+}
+
+
 struct JobProgress {
   volatile bool running = false;
   volatile u32 remaining = 0;
@@ -119,63 +148,7 @@ void clear_jobs() {
 }
 
 bool queue_jobs(Jobs j) {
-
   return job_queue.push_bottom(j);
-  // #define DRIVE_INDEX 2
-  //
-  // int32_t new_freq = j.jobs[2].frequency;
-  // if(j.jobs[DRIVE_INDEX].dir==SET || j.jobs[DRIVE_INDEX].dir==KEEP&&drive_freq<0) new_freq*=-1;
-  //
-  // #define DRIVE_MAX_ACCEL_STEPS DRIVE_MAX_ACCEL*DRIVE_STEPS_PER_REV
-  //
-  // Serial.print(drive_freq);
-  // Serial.print(" ");
-  // Serial.println(new_freq);
-  //
-  // int32_t df = new_freq-drive_freq;
-  // if(abs(df) > DRIVE_MAX_ACCEL_STEPS) {
-  //   Jobs new_jobs = j;
-  //
-  //   //step up the acceleration
-  //   if(df<0){
-  //     drive_freq -= DRIVE_MAX_ACCEL_STEPS;
-  //   } else {
-  //     drive_freq += DRIVE_MAX_ACCEL_STEPS;
-  //   }
-  //   new_jobs.jobs[DRIVE_INDEX].frequency = abs(drive_freq);
-  //
-  //   //figure out how to scale everything else
-  //   float factor = abs(drive_freq / (float) new_freq);
-  //
-  //
-  //   //rescale and modify the duration of everything else
-  //   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
-  //     if(i!=DRIVE_INDEX) new_jobs.jobs[i].frequency *= factor;
-  //     uint16_t dt = (uint16_t) ((float) DRIVE_ACCEL_RESOLUTION * new_jobs.jobs[i].frequency);
-  //     if(j.jobs[i].end.ty == COUNT) {
-  //       if(j.jobs[i].end.cond<dt){
-  //         new_jobs.jobs[i].end.cond = j.jobs[i].end.cond;
-  //         j.jobs[i].end.cond = 0;
-  //       } else {
-  //         new_jobs.jobs[i].end.cond = dt;
-  //         j.jobs[i].end.cond -= dt;
-  //       }
-  //     }
-  //     Serial.print(dt);
-  //     Serial.print(" ");
-  //   }
-  //   Serial.println(factor);
-  //
-  //   if(job_queue.push_bottom(new_jobs)) {
-  //     return queue_jobs(j);
-  //   } else {
-  //     return false;
-  //   }
-  // } else {
-  //   drive_freq = new_freq;
-  //   return job_queue.push_bottom(j);
-  // }
-
 }
 
 bool job_done() {
@@ -265,44 +238,17 @@ void machine_loop() {
           *timers[i].tccrna = 0;
 
           if(current_jobs[i].running) {
-            *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
-            *timers[i].timsk = 2; //enable interrupt of OCRnA
-            uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) next[i].frequency;//get the timer period
-            uint32_t p = period;
+            set_timer_frequency(i, next[i].frequency);
 
-            byte prescaling = 1;
-
-            uint32_t mask = i<3 ? 0xFFFF0000 : 0xFFFFFF00;
-
-            while((period & mask)&&prescaling<0b101) {
-              if(prescaling<=2){
-                if((period & 0b111)>=4){
-                  period = (period>>3)+1;
-                }else {
-                  period = period>>3;
-                }
-              } else {
-                if((period & 0b11)>=2){
-                  period = (period>>2) + 1;
-                } else {
-                  period = period>>2;
-                }
-              }
-              prescaling++;
-            }
-
-            *timers[i].tccrnb |= prescaling;
-            *timers[i].ocra = (uint16_t) period;
-
-            Serial.print(next[i].frequency);
-            Serial.print(" ");
-            Serial.print(p);
-            Serial.print(" ");
-            Serial.print(*timers[i].ocra);
-            Serial.print(" ");
-            Serial.print(*timers[i].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.println(end.cond);
+            // Serial.print(next[i].frequency);
+            // Serial.print(" ");
+            // Serial.print(p);
+            // Serial.print(" ");
+            // Serial.print(*timers[i].ocra);
+            // Serial.print(" ");
+            // Serial.print(*timers[i].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
