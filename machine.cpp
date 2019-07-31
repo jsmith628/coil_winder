@@ -36,21 +36,24 @@ inline void step_drive() {
 
 //A handy container object for all of the timer registers
 typedef struct {
+    const byte bits;
+    const uint32_t mask;
     volatile uint8_t * tccrna;
     volatile uint8_t * tccrnb;
     volatile uint16_t * tcnt;
     volatile uint16_t * ocra;
-    volatile uint8_t * ocrah;
-    volatile uint8_t * ocral;
+    volatile uint16_t * ocrb;
+    volatile uint16_t * ocrc;
     volatile uint8_t * timsk;
 } Timer;
 
 //all of the 16bit timers on the ATMEGA2560
 Timer timers[4] = {
-  {&TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3AH, &OCR3AL, &TIMSK3},
-  {&TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4AH, &OCR4AL, &TIMSK4},
-  {&TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5AH, &OCR5AL, &TIMSK5},
-  {&TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1AH, &OCR1AL, &TIMSK1},
+  {16, 0xFFFF0000, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3B, &OCR3C, &TIMSK3},
+  {16, 0xFFFF0000, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4B, &OCR4C, &TIMSK4},
+  {16, 0xFFFF0000, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5B, &OCR5C, &TIMSK5},
+  {8, 0xFFFFFF00, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &OCR1C, &TIMSK1},
+  // {8, 0xFFFFFF00, &TCCR2A, &TCCR2A, &TCNT2, &OCR2A, &OCR2B, NULL, &TIMSK2},
 };
 
 struct JobProgress {
@@ -304,8 +307,7 @@ void machine_loop() {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
             *timers[i].timsk = 0;
-            *timers[i].ocrah = 0;
-            *timers[i].ocral = 0;
+            *timers[i].ocra = 0;
           }
 
         }
