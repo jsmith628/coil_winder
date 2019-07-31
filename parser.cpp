@@ -38,7 +38,7 @@ void interpret_gcode(command c){
         g1(c.modifiers[0].f, c.modifiers[1].f, c.modifiers[2].f, c.modifiers[3].f);
         break;
       case 4:
-        g4(c.modifiers[6].f, c.modifiers[2].f);
+        g4(c.modifiers[4].f, c.modifiers[2].f);
         break;
       case 20:
         g20();
@@ -174,8 +174,8 @@ void parse(String g){
     while (x < g.length()){
       if (isAlpha(g.charAt(x))){
         if(g.charAt(x) == 'G' || g.charAt(x) == 'M'){
-          interpret_gcode(c)
-          parse(g.substring(x, g.length())));
+          interpret_gcode(c);
+          parse(g.substring(x, g.length()));
           return;
         }
           modifier m;
@@ -227,8 +227,13 @@ void parse(String g){
 
 bool read_command(){
 
+<<<<<<< HEAD
         String input = Serial.readString();
         parse(input);
+=======
+    String input = Serial.readString();
+    parse(input);
+>>>>>>> testing
 
 }
 

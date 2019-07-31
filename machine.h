@@ -39,6 +39,9 @@
 #define DRIVE_DEDGE false
 #define DRIVE_MS 1
 #define DRIVE_STEPS_PER_TURN 200
+#define DRIVE_MAX_BASE_SPEED 20
+#define DRIVE_MAX_ACCEL 2
+#define DRIVE_ACCEL_RESOLUTION 0.5
 
 #define ROD_MM_PER_TURN 8
 #define AVR_CLK_FREQ 16000000
@@ -47,10 +50,13 @@
 #define GEAR_1_TEETH 20
 #define GEAR_2_TEETH 8
 
+#define FEED_STEPS_PER_MM (FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
+#define DRIVE_STEPS_PER_REV (((float) GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
+
 #define SUBJOBS_PER_JOB 4
 #define NOOP_JOB {KEEP, KEEP, 0, {IMMEDIATE, 0} }
 
-#include "timings.h"
 #include "queue.h"
 
 void step_clamp();

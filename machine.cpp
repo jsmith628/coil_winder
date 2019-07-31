@@ -105,12 +105,74 @@ ISR(TIMER3_COMPA_vect) { do_job(0); }
 ISR(TIMER4_COMPA_vect) { do_job(1); }
 ISR(TIMER5_COMPA_vect) { do_job(2); }
 
-Queue<Jobs,4> job_queue = Queue<Jobs,4>();
+Queue<Jobs,6> job_queue = Queue<Jobs,6>();
 
-bool queue_jobs(Jobs j) { return job_queue.push_bottom(j); }
+int32_t drive_freq = 0;
+bool drive_dir = false;
+
 void clear_jobs() {
   job_queue.clear();
   for(byte i=0; i<SUBJOBS_PER_JOB; current_jobs[i++].running = false);
+}
+
+bool queue_jobs(Jobs j) {
+
+  return job_queue.push_bottom(j);
+  // #define DRIVE_INDEX 2
+  //
+  // int32_t new_freq = j.jobs[2].frequency;
+  // if(j.jobs[DRIVE_INDEX].dir==SET || j.jobs[DRIVE_INDEX].dir==KEEP&&drive_freq<0) new_freq*=-1;
+  //
+  // #define DRIVE_MAX_ACCEL_STEPS DRIVE_MAX_ACCEL*DRIVE_STEPS_PER_REV
+  //
+  // Serial.print(drive_freq);
+  // Serial.print(" ");
+  // Serial.println(new_freq);
+  //
+  // int32_t df = new_freq-drive_freq;
+  // if(abs(df) > DRIVE_MAX_ACCEL_STEPS) {
+  //   Jobs new_jobs = j;
+  //
+  //   //step up the acceleration
+  //   if(df<0){
+  //     drive_freq -= DRIVE_MAX_ACCEL_STEPS;
+  //   } else {
+  //     drive_freq += DRIVE_MAX_ACCEL_STEPS;
+  //   }
+  //   new_jobs.jobs[DRIVE_INDEX].frequency = abs(drive_freq);
+  //
+  //   //figure out how to scale everything else
+  //   float factor = abs(drive_freq / (float) new_freq);
+  //
+  //
+  //   //rescale and modify the duration of everything else
+  //   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+  //     if(i!=DRIVE_INDEX) new_jobs.jobs[i].frequency *= factor;
+  //     uint16_t dt = (uint16_t) ((float) DRIVE_ACCEL_RESOLUTION * new_jobs.jobs[i].frequency);
+  //     if(j.jobs[i].end.ty == COUNT) {
+  //       if(j.jobs[i].end.cond<dt){
+  //         new_jobs.jobs[i].end.cond = j.jobs[i].end.cond;
+  //         j.jobs[i].end.cond = 0;
+  //       } else {
+  //         new_jobs.jobs[i].end.cond = dt;
+  //         j.jobs[i].end.cond -= dt;
+  //       }
+  //     }
+  //     Serial.print(dt);
+  //     Serial.print(" ");
+  //   }
+  //   Serial.println(factor);
+  //
+  //   if(job_queue.push_bottom(new_jobs)) {
+  //     return queue_jobs(j);
+  //   } else {
+  //     return false;
+  //   }
+  // } else {
+  //   drive_freq = new_freq;
+  //   return job_queue.push_bottom(j);
+  // }
+
 }
 
 bool job_done() {
@@ -207,7 +269,9 @@ void machine_loop() {
 
             byte prescaling = 1;
 
-            while((period & 0xFFFF0000)&&prescaling<0b101) {
+            uint32_t mask = i<3 ? 0xFFFF0000 : 0xFFFFFF00;
+
+            while((period & mask)&&prescaling<0b101) {
               if(prescaling<=2){
                 if((period & 0b111)>=4){
                   period = (period>>3)+1;
@@ -236,8 +300,6 @@ void machine_loop() {
             Serial.print(*timers[i].tccrnb,BIN);
             Serial.print(" ");
             Serial.println(end.cond);
-            // *timers[i].ocrah = (byte) (period >> 8);
-            // *timers[i].ocral = (byte) (period && 0xFF);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
@@ -249,6 +311,8 @@ void machine_loop() {
         }
 
       sei();
+    } else {
+      drive_freq = 0;
     }
   }
 }
