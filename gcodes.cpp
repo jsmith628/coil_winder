@@ -42,7 +42,7 @@ Axis axes[NUM_AXES] = {
   {'W', 0,0,0, 0.0,0, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
 };
 
-bool endstops_enabled = true;
+bool endstops_enabled = false;
 
 inline float pos_from_steps(byte axis, int32_t new_pos) {
   if(axes[axis].coords==LOCAL) {
@@ -253,7 +253,7 @@ void g52 (float a, float b, float w) {
 void g90() {
   Serial.print("Machine Coords: ");
 
-  for(byte i=0; i<NUM_AXES; i++) {
+  for(byte i=0; i<W_AXIS; i++) {
     set_machine_coords(i);
     Serial.print(axes[i].name);
     Serial.print("=");
@@ -266,7 +266,7 @@ void g90() {
 //Incremental positioning (position defined relative to previous position)
 void g91() {
   Serial.println("Incremental Coords");
-  for(byte i=0; i<NUM_AXES; i++) set_incremental_coords(i);
+  for(byte i=0; i<W_AXIS; i++) set_incremental_coords(i);
 }
 
 //Set current position to specified value (A position, B position, Spindle position)
@@ -336,12 +336,10 @@ void m18() {
 void m30() {}
 
 //Spindle absolute positioning
-void m82(){
-
-}
+void m82(){set_machine_coords(W_AXIS);}
 
 //Spindle incremental positioning
-void m83(){}
+void m83(){set_incremental_coords(W_AXIS);}
 
 //Set axis steps per unit
 void m92(float a, float b, float w){
