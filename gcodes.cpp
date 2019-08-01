@@ -211,28 +211,34 @@ void g21 () { set_units(1.0); }
 //Home axis (A final position, B final position)
 void g28 (bool a, bool b) {
 
-  // Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
-  //
-  // if(a) {
-  //   next.jobs[0] = from_speed_dist(6*units, 1, FEED_STEPS_PER_MM);
-  //   next.jobs[0].end.ty = STALL_GUARD;
-  //   next.jobs[0].end.cond = FEED_SGT;
-  // }
-  //
-  // if(b) {
-  //   next.jobs[1] = from_speed_dist(6*units, 1, CLAMP_STEPS_PER_MM);
-  //   next.jobs[1].end.ty = STALL_GUARD;
-  //   next.jobs[1].end.cond = CLAMP_SGT;
-  // }
-  //
-  // queue_jobs(next);
-  //
-  // a_pos = b_pos = 0;
+  g31(a?1:0, b?1:0);
+  axes[A_AXIS].machine_pos = 0;
+  axes[A_AXIS].pos = pos_from_steps(A_AXIS,0);
+  axes[B_AXIS].machine_pos = 0;
+  axes[B_AXIS].pos = pos_from_steps(B_AXIS,0);
 
 }
 
 //Feed until skip (A axis enable, B axis enable)
-void g31 (int8_t a, int8_t b) {}
+void g31 (int8_t a, int8_t b) {
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  if(a!=0) {
+    next.jobs[A_AXIS].frequency = (uint16_t) (6.0*axes[A_AXIS].steps_per_machine_unit);
+    next.jobs[A_AXIS].dir = a<0 ? SET : UNSET;
+    next.jobs[A_AXIS].end.ty = STALL_GUARD;
+    next.jobs[A_AXIS].end.cond = FEED_SGT;
+  }
+
+  if(b!=0) {
+    next.jobs[B_AXIS].frequency = (uint16_t) (6.0*axes[B_AXIS].steps_per_machine_unit);
+    next.jobs[B_AXIS].dir = a<0 ? SET : UNSET;
+    next.jobs[B_AXIS].end.ty = STALL_GUARD;
+    next.jobs[B_AXIS].end.cond = CLAMP_SGT;
+  }
+
+  queue_jobs(next);
+}
 
 //Define maximum spindle Speed (Speed)
 void g50 (float s) {}
