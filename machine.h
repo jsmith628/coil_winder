@@ -4,11 +4,11 @@
 #define _MACHINE_H_
 
 
-#define EN_CLAMP 38
-#define DIR_CLAMP 55
-#define STEP_CLAMP 54
-#define CS_CLAMP 53
-#define SG_CLAMP 2
+#define EN_CLAMP 56
+#define DIR_CLAMP 61
+#define STEP_CLAMP 60
+#define CS_CLAMP 49
+#define SG_CLAMP 19
 #define CLAMP_STEPS_PER_TURN 200
 #define CLAMP_INVERT_DIR false
 #define CLAMP_INVERT_EN true
@@ -16,13 +16,14 @@
 #define CLAMP_MS 16
 #define CLAMP_CURRENT 800
 #define CLAMP_SGT 15
+#define CLAMP_RANGE (143.5-10)
 
 
-#define EN_FEED 56
-#define DIR_FEED 61
-#define STEP_FEED 60
-#define CS_FEED 49
-#define SG_FEED 19
+#define EN_FEED 38
+#define DIR_FEED 55
+#define STEP_FEED 54
+#define CS_FEED 53
+#define SG_FEED 2
 #define FEED_STEPS_PER_TURN 200
 #define FEED_INVERT_DIR false
 #define FEED_INVERT_EN true
@@ -30,6 +31,7 @@
 #define FEED_MS 16
 #define FEED_CURRENT 800
 #define FEED_SGT 15
+#define FEED_RANGE (200-10)
 
 #define EN_DRIVE 62
 #define DIR_DRIVE 48
@@ -53,6 +55,9 @@
 #define FEED_STEPS_PER_MM (FEED_STEPS_PER_TURN * FEED_MS * (FEED_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
 #define CLAMP_STEPS_PER_MM (CLAMP_STEPS_PER_TURN * CLAMP_MS * (CLAMP_DEDGE?1.0:2.0) / (float) ROD_MM_PER_TURN)
 #define DRIVE_STEPS_PER_REV (((float) GEAR_2_TEETH / (float) GEAR_1_TEETH) * DRIVE_STEPS_PER_TURN * DRIVE_MS * (DRIVE_DEDGE?1.0:2.0))
+
+#define FEED_STEP_RANGE (int32_t) (FEED_RANGE * FEED_STEPS_PER_MM)
+#define CLAMP_STEP_RANGE (int32_t) (CLAMP_RANGE * CLAMP_STEPS_PER_MM)
 
 #define SUBJOBS_PER_JOB 4
 #define NOOP_JOB {KEEP, KEEP, 0, {IMMEDIATE, 0} }
