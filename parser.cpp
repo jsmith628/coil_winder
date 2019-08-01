@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 command com;
-char buffer[BUFFERLENGTH];
+char buffer[BUFFERLENGTH+1];
 
 void display_warning(String type){
   Serial.print("Warning: ");
@@ -228,8 +228,9 @@ void parse(size_t s, char* buf){
 
 bool read_command(){
 
-
-    parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
+    size_t len = Serial.readBytesUntil('\n', buffer, BUFFERLENGTH);
+    buffer[len] = '\0';
+    parse(len, buffer);
 
 }
 
