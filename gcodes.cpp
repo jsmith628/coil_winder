@@ -37,12 +37,12 @@ typedef struct {
 } Axis;
 
 Axis axes[NUM_AXES] = {
-  {'A', 0,0,0, 0.0,0, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
-  {'B', 0,0,0, 0.0,0, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
-  {'W', 0,0,0, 0.0,0, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
+  {'A', 0,-FEED_STEP_RANGE,0, 0.0,0, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
+  {'B', 0,-CLAMP_STEP_RANGE,0, 0.0,0, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
+  {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
 };
 
-bool endstops_enabled = false;
+bool endstops_enabled = true;
 
 inline float pos_from_steps(byte axis, int32_t new_pos) {
   if(axes[axis].coords==LOCAL) {
@@ -71,6 +71,13 @@ Job move_to(byte axis, float x, float s) {
 
       int32_t new_pos = axes[axis].machine_pos + (int32_t) (d*axes[axis].steps_per_unit);
       if(endstops_enabled) new_pos = min(max(new_pos,axes[axis].min_pos), axes[axis].max_pos);
+
+      Serial.print(axes[axis].min_pos);
+      Serial.print(" ");
+      Serial.print(new_pos);
+      Serial.print(" ");
+      Serial.println(axes[axis].max_pos);
+
       j.end.cond = (uint16_t) abs(new_pos - axes[axis].machine_pos);
 
       axes[axis].machine_pos = new_pos;
@@ -363,7 +370,16 @@ void m112() {
 }
 
 //Current position
-float m114() {}
+float m114() {
+  for(byte i=0; i<NUM_AXES; i++) {
+    Serial.print(axes[i].name);
+    Serial.print("=");
+    Serial.print(axes[i].pos);
+    Serial.print(" ");
+  }
+  Serial.println();
+}
+
 void m114(bool a, bool b) {}
 
 //Enable software endstops
