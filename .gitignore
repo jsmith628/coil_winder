@@ -2,3 +2,4 @@
 *.eep
 *.hex
 *.elf
+*.out
