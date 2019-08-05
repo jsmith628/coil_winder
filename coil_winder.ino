@@ -13,8 +13,6 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available()){
-    read_command();
-  }
+  read_command();
   machine_loop();
 }

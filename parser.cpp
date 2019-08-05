@@ -3,6 +3,13 @@
 #include "gcodes.h"
 #include <Arduino.h>
 
+#define A 0
+#define B 1
+#define W 2
+#define S 3
+#define FR 4
+#define P 5
+
 command com;
 char buffer[BUFFERLENGTH];
 
@@ -228,13 +235,21 @@ void parse(size_t s, char* buf){
 
 bool read_command(){
 
-
-    parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
-
+  if (Serial.available()){
+    if (space_in_queue() >= MINIMUMSPACE){
+      parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
+    }else{
+      Serial.print(17);
+    }
+  }else{
+    if (spaceInQueue >= MINIMUMSPACE){
+      Serial.print(19);
+    }
+  }
 }
 
 void parser_setup(){
 
   Serial.begin(115200);
-
+  while (!Serial){}
 }

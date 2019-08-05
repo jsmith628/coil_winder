@@ -4,13 +4,8 @@
 #include <WString.h>
 
 #define MODIFIERLENGTH 6
-#define BUFFERLENGTH 60
-#define A 0
-#define B 1
-#define W 2
-#define S 3
-#define FR 4
-#define P 5
+#define BUFFERLENGTH 64
+#define MINIMUMSPACE 5
 
 typedef struct {
   char c;
@@ -31,12 +26,6 @@ void display_warning(String type, String details);
 
 
 void display_warning(String type, unsigned int specificType, String details);
-
-
-void interpret_gcode(command c);
-
-
-void parse(String g);
 
 
 bool read_command();
