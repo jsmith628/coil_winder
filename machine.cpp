@@ -34,48 +34,73 @@ inline void step_drive() {
   digitalWrite(STEP_DRIVE,step?HIGH:LOW);
 }
 
+const byte prescaling_16_bit[6] = {1,3,3,2,2,0};
+const byte prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
+
 //A handy container object for all of the timer registers
 typedef struct {
     const byte bits;
     const uint32_t mask;
+    const byte * pre_mul;
     volatile uint8_t * tccrna;
     volatile uint8_t * tccrnb;
-    volatile uint16_t * tcnt;
-    volatile uint16_t * ocra;
-    volatile uint16_t * ocrb;
-    volatile uint16_t * ocrc;
+    volatile void * tcnt;
+    volatile void * ocra;
     volatile uint8_t * timsk;
 } Timer;
 
 //all of the 16bit timers on the ATMEGA2560
 Timer timers[4] = {
-  {16, 0xFFFF0000, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3B, &OCR3C, &TIMSK3},
-  {16, 0xFFFF0000, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4B, &OCR4C, &TIMSK4},
-  {16, 0xFFFF0000, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5B, &OCR5C, &TIMSK5},
-  {8, 0xFFFFFF00, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &OCR1C, &TIMSK1},
-  // {8, 0xFFFFFF00, &TCCR2A, &TCCR2A, &TCNT2, &OCR2A, &OCR2B, NULL, &TIMSK2},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &TIMSK3},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &TIMSK4},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &TIMSK5},
+  {8, 0xFFFFFF00, prescaling_timer_2, &TCCR2A, &TCCR2B, &TCNT2, &OCR2A, &TIMSK2},
+  // {8, 0xFFFFFF00, prescaling_timer_2, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &TIMSK1},
 };
 
-uint16_t get_timer_period(uint16_t freq, byte* pre, const uint32_t mask) {
+inline void set_timer_count(byte id, uint16_t val) {
+  if(timers[id].bits==16)
+    *((volatile uint16_t*)timers[id].tcnt) = val;
+  else
+    *((volatile uint8_t*)timers[id].tcnt) = (uint8_t) val;
+}
+
+inline void set_timer_period(byte id, uint16_t val) {
+  if(timers[id].bits==16)
+    *((volatile uint16_t*)timers[id].ocra) = val;
+  else
+    *((volatile uint8_t*)timers[id].ocra) = (uint8_t) val;
+}
+
+inline uint16_t get_timer_period(byte id) {
+  if(timers[id].bits==16)
+    return *((volatile uint16_t*)timers[id].ocra);
+  else
+    return *((volatile uint8_t*)timers[id].ocra);
+}
+
+uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
   uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) freq;//get the timer period
   byte prescaling = 1;
 
-  while((period & mask)&&prescaling<0b101) {
-    if(prescaling<=2){
-      if((period & 0b111)>=4){
-        period = (period>>3)+1;
-      }else {
-        period = period>>3;
-      }
+  while((period & timers[id].mask)&&(timers[id].pre_mul[prescaling])) {
+    Serial.print(period);
+    Serial.print(" ");
+    Serial.println(prescaling);
+
+    byte pre_mul = timers[id].pre_mul[prescaling];
+    Serial.println(pre_mul);
+    if(period & (1<<(pre_mul-1))) {
+      period = (period>>pre_mul) + 1;
     } else {
-      if((period & 0b11)>=2){
-        period = (period>>2) + 1;
-      } else {
-        period = period>>2;
-      }
+      period = (period>>pre_mul);
     }
+
     prescaling++;
   }
+  Serial.print(period);
+  Serial.print(" ");
+  Serial.println(prescaling);
 
   *pre = prescaling;
   return (uint16_t) period;
@@ -153,7 +178,7 @@ inline void trigger_sg(byte id) {
 void sg_0(void) {trigger_sg(0);}
 void sg_1(void) {trigger_sg(1);}
 
-ISR(TIMER1_COMPA_vect) { do_job(3); }
+ISR(TIMER2_COMPA_vect) { do_job(3); }
 ISR(TIMER3_COMPA_vect) { do_job(0); }
 ISR(TIMER4_COMPA_vect) { do_job(1); }
 ISR(TIMER5_COMPA_vect) { do_job(2); }
@@ -255,7 +280,7 @@ void machine_loop() {
 
 
           //clear the timer value
-          *timers[i].tcnt = 0;
+          set_timer_count(i,0);
 
           //clear the config
           //note we don't need prescaling because we wont really need events triggering
@@ -288,12 +313,13 @@ void machine_loop() {
             // *timers[i].tccrnb |= current_jobs[i].accels.prescaling[0];
 
             byte prescaling = 1;
-            *timers[i].ocra = get_timer_period(next[i].frequency, &prescaling, timers[i].mask);
+            set_timer_period(i,get_timer_period(i, next[i].frequency, &prescaling));
+
             *timers[i].tccrnb |= prescaling;
 
             Serial.print(next[i].frequency);
             Serial.print(" ");
-            Serial.print(*timers[i].ocra);
+            Serial.print(get_timer_period(i));
             Serial.print(" ");
             Serial.print(*timers[i].tccrnb,BIN);
             Serial.print(" ");
@@ -302,7 +328,7 @@ void machine_loop() {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
             *timers[i].timsk = 0;
-            *timers[i].ocra = 0;
+            set_timer_period(i,0);
           }
 
         }

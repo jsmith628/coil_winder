@@ -5,7 +5,7 @@
 
 #define DEFAULT_SPEED 1
 
-#define DWELL_MS_PRECISION 1
+#define DWELL_FREQUENCY 1000
 
 #define A_AXIS 0
 #define B_AXIS 1
@@ -72,11 +72,11 @@ Job move_to(byte axis, float x, float s) {
       int32_t new_pos = axes[axis].machine_pos + (int32_t) (d*axes[axis].steps_per_unit);
       if(endstops_enabled) new_pos = min(max(new_pos,axes[axis].min_pos), axes[axis].max_pos);
 
-      Serial.print(axes[axis].min_pos);
-      Serial.print(" ");
-      Serial.print(new_pos);
-      Serial.print(" ");
-      Serial.println(axes[axis].max_pos);
+      // Serial.print(axes[axis].min_pos);
+      // Serial.print(" ");
+      // Serial.print(new_pos);
+      // Serial.print(" ");
+      // Serial.println(axes[axis].max_pos);
 
       j.end.cond = (uint16_t) abs(new_pos - axes[axis].machine_pos);
 
@@ -195,13 +195,13 @@ void g4 (float p, float s) {
 
   if(p==p) {
     if(s==s) p += s*1000.0;
-    next.jobs[3].frequency = AVR_CLK_FREQ / (DWELL_MS_PRECISION*1000);//microsecond precision
+    next.jobs[3].frequency = DWELL_FREQUENCY;
     next.jobs[3].end.ty = COUNT;
-    next.jobs[3].end.cond = (uint16_t) (p * DWELL_MS_PRECISION);
+    next.jobs[3].end.cond = (uint16_t) (p/1000.0 * DWELL_FREQUENCY);
   } else if(s==s) {
-    next.jobs[3].frequency = AVR_CLK_FREQ / (DWELL_MS_PRECISION*1000);//microsecond precision
+    next.jobs[3].frequency = DWELL_FREQUENCY;
     next.jobs[3].end.ty = COUNT;
-    next.jobs[3].end.cond = (uint16_t) (s * DWELL_MS_PRECISION*1000);
+    next.jobs[3].end.cond = (uint16_t) (s * DWELL_FREQUENCY);
   }
 
   queue_jobs(next);
