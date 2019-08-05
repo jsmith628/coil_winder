@@ -172,6 +172,10 @@ bool queue_jobs(Jobs j) {
   return job_queue.push_bottom(j);
 }
 
+byte open_jobs() {
+  return (byte) min(job_queue.capacity() - job_queue.count(), 255);
+}
+
 bool job_done() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
     if(current_jobs[i].running) {

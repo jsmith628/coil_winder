@@ -95,6 +95,7 @@ typedef struct {
 
 bool queue_jobs(Jobs j);
 void clear_jobs();
+byte open_jobs();
 
 bool busy();
 

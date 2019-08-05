@@ -1,6 +1,9 @@
 #ifndef _GCODE_H_
   #define _GCODE_H_
 
+//control functions
+uint8_t space_in_queue();
+
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis position, B axis position, Spindle rotations, Speed, Feedrate)

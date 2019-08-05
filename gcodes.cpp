@@ -140,6 +140,10 @@ inline float drive_speed(float da, float w, float s, float travel) {
   }
 }
 
+
+//control functions
+byte space_in_queue() { return open_jobs(); }
+
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis position, B axis position, Spindle rotations, Speed, Feedrate)
