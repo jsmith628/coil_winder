@@ -15,7 +15,7 @@
 #define CLAMP_DEDGE true
 #define CLAMP_MS 16
 #define CLAMP_CURRENT 800
-#define CLAMP_SGT 15
+#define CLAMP_SGT 17
 #define CLAMP_RANGE (143.5-10)
 
 

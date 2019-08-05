@@ -189,9 +189,9 @@ void machine_loop() {
   //
   // int time = millis();
   // if(time-last_time>1000) {
-  //   Serial.print(clamp.sg_result());
+  //   Serial.print(clamp.TSTEP());
   //   Serial.print(" ");
-  //   Serial.println(feed.sg_result());
+  //   Serial.println(feed.TSTEP());
   //   last_time = time;
   // }
 
@@ -318,7 +318,7 @@ void machine_init() {
   clamp.rms_current(CLAMP_CURRENT);
   clamp.dedge(CLAMP_DEDGE);
   clamp.microsteps(CLAMP_MS);
-  clamp.TCOOLTHRS(0xFFFFF);
+  clamp.TCOOLTHRS(400);
   clamp.sgt(CLAMP_SGT);
   clamp.diag0_stall(true);
 
@@ -326,7 +326,7 @@ void machine_init() {
   feed.rms_current(FEED_CURRENT);
   feed.dedge(FEED_DEDGE);
   feed.microsteps(FEED_MS);
-  feed.TCOOLTHRS(0xFFFFF);
+  feed.TCOOLTHRS(400);
   feed.sgt(FEED_SGT);
   feed.diag0_stall(true);
 

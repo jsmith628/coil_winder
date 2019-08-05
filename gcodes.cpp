@@ -123,6 +123,7 @@ float last_feedrate = 0;
 
 inline float next_feedrate(float f) {
   if(f==f) {
+    f = abs(f);
     last_feedrate = f;
     return f;
   } else {
@@ -133,9 +134,9 @@ inline float next_feedrate(float f) {
 inline float drive_speed(float da, float w, float s, float travel) {
   if(s!=s && da==da) {
     float dw = position_change(W_AXIS, w);
-    return dw / (da / travel);
+    return abs(dw / (da / travel));
   } else {
-    return s;
+    return abs(s);
   }
 }
 
@@ -169,8 +170,8 @@ void g1 (float a, float b, float w, float s, float f) {
   float max_move = da==da ? db==db ? max(da,db) : da : db;
   float time = max_move / travel;
 
-  float a_speed = da / time;
-  float b_speed = db / time;
+  float a_speed = abs(da / time);
+  float b_speed = abs(db / time);
   float drive = drive_speed(da,w,s,a_speed);
 
   Jobs next;
@@ -210,8 +211,13 @@ void g21 () { set_units(1.0); }
 
 //Home axis (A final position, B final position)
 void g28 (bool a, bool b) {
+  if(!a && !b){
+    a = true;
+    b = true;
+  }
 
   g31(a?1:0, b?1:0);
+
   axes[A_AXIS].machine_pos = 0;
   axes[A_AXIS].pos = pos_from_steps(A_AXIS,0);
   axes[B_AXIS].machine_pos = 0;
