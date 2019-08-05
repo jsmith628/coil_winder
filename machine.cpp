@@ -84,12 +84,8 @@ uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
   byte prescaling = 1;
 
   while((period & timers[id].mask)&&(timers[id].pre_mul[prescaling])) {
-    Serial.print(period);
-    Serial.print(" ");
-    Serial.println(prescaling);
-
     byte pre_mul = timers[id].pre_mul[prescaling];
-    Serial.println(pre_mul);
+
     if(period & (1<<(pre_mul-1))) {
       period = (period>>pre_mul) + 1;
     } else {
@@ -98,9 +94,6 @@ uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
 
     prescaling++;
   }
-  Serial.print(period);
-  Serial.print(" ");
-  Serial.println(prescaling);
 
   *pre = prescaling;
   return (uint16_t) period;
@@ -317,13 +310,13 @@ void machine_loop() {
 
             *timers[i].tccrnb |= prescaling;
 
-            Serial.print(next[i].frequency);
-            Serial.print(" ");
-            Serial.print(get_timer_period(i));
-            Serial.print(" ");
-            Serial.print(*timers[i].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.println(end.cond);
+            // Serial.print(next[i].frequency);
+            // Serial.print(" ");
+            // Serial.print(get_timer_period(i));
+            // Serial.print(" ");
+            // Serial.print(*timers[i].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
