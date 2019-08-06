@@ -8,7 +8,7 @@ class Queue {
 
   private:
     T data[1 << P];
-    unsigned int top, bottom;
+    unsigned int top, bottom, size;
 
     inline unsigned int mask();
 
@@ -38,40 +38,42 @@ template<class T, byte P>
 void Queue<T,P>::clear() {
   top = 0;
   bottom = 0;
+  size = 0;
 }
 
-template<class T, byte P> inline unsigned int Queue<T,P>::capacity() { return 1 << P; }
+template<class T, byte P> inline unsigned int Queue<T,P>::capacity() { return (1 << P); }
 template<class T, byte P> inline unsigned int Queue<T,P>::mask() { return (1 << P) - 1; }
 
 template<class T, byte P>
 unsigned int Queue<T,P>::count() {
-  if(top >= bottom) {
-    return top - bottom;
-  } else {
-    return capacity() - (bottom - top);
-  }
+  // if(top >= bottom) {
+  //   return top - bottom;
+  // } else {
+  //   return capacity() - (bottom - top);
+  // }
+  return size;
 }
 
 template<class T, byte P>
 bool Queue<T,P>::push_top(T val) {
-  unsigned int new_top = (top+1) & mask();
-  if(new_top==bottom){
+  if(size==capacity()){
     return false;
   } else {
     data[top] = val;
-    top = new_top;
+    top = (top+1)&mask;
+    size++;
     return true;
   }
 }
 
 template<class T, byte P>
 bool Queue<T,P>::push_bottom(T val) {
-  unsigned int new_bottom = (bottom-1) & mask();
-  if(top==new_bottom){
+  if(size==capacity()){
     return false;
   } else {
     data[bottom] = val;
-    bottom = new_bottom;
+    bottom = (bottom-1) & mask();
+    size++;
     return true;
   }
 }
@@ -82,8 +84,9 @@ template<class T, byte P> T Queue<T,P>::peek_bottom() { return data[bottom]; }
 template<class T, byte P>
 T Queue<T,P>::pop_top() {
   T val = peek_top();
-  if(top!=bottom){
+  if(size!=0){
     top = (top-1) & mask();
+    size--;
   }
   return val;
 }
@@ -91,8 +94,9 @@ T Queue<T,P>::pop_top() {
 template<class T, byte P>
 T Queue<T,P>::pop_bottom() {
   T val = peek_bottom();
-  if(top!=bottom){
+  if(size!=0){
     bottom = (bottom+1) & mask();
+    size--;
   }
   return val;
 }
