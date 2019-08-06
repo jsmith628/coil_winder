@@ -235,15 +235,25 @@ void parse(size_t s, char* buf){
 
 bool read_command(){
 
+  static bool xon = true;
+
+
+
   if (Serial.available()){
     if (space_in_queue() >= MINIMUMSPACE){
-      parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
+      // if (!xon && space_in_queue() >= MINIMUMSPACE){
+      //   Serial.print((char) 17);
+      //   Serial.println("Queue open!");
+      //   xon = true;
+      // }
+      size_t len = Serial.readBytesUntil('\n', buffer, BUFFERLENGTH);
+      buffer[len] = '\0';
+      parse(len, buffer);
+      Serial.println(space_in_queue(), DEC);
     }else{
-      Serial.print(17);
-    }
-  }else{
-    if (spaceInQueue >= MINIMUMSPACE){
-      Serial.print(19);
+      if(xon) Serial.println("Queue full!");
+      Serial.print((char) 19);
+      xon = false;
     }
   }
 }

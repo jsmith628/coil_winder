@@ -176,7 +176,7 @@ ISR(TIMER3_COMPA_vect) { do_job(0); }
 ISR(TIMER4_COMPA_vect) { do_job(1); }
 ISR(TIMER5_COMPA_vect) { do_job(2); }
 
-Queue<Jobs,6> job_queue = Queue<Jobs,6>();
+Queue<Jobs,2> job_queue = Queue<Jobs,2>();
 
 int32_t drive_freq = 0;
 bool drive_dir = false;
