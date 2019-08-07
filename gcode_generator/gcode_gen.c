@@ -6,7 +6,7 @@
 
 bool comments = false;
 bool finishingMove = false;
-bool waitOnStart = true;
+bool waitOnStart = false;
 bool imperial = false;
 int turns = 0;
 int finishingTurns = 0;
