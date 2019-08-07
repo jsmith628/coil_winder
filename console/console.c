@@ -128,7 +128,7 @@ void *write_thread(void* arg) {
       wait_until(&cmd_ready, &cmd_lock, &cmd_on);
     } else {
       //write the line to the device
-      printf("Writing!\n");
+      // printf("Writing!\n");
       write(dev, cmd_buffer_back->buf, cmd_buffer_back->size);
 
       //pop the line off of the buffer

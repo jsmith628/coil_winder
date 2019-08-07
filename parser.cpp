@@ -249,7 +249,7 @@ bool read_command(){
       size_t len = Serial.readBytesUntil('\n', buffer, BUFFERLENGTH);
       buffer[len] = '\0';
       parse(len, buffer);
-      Serial.println(space_in_queue());
+      // Serial.println(space_in_queue());
     }
   }
 
