@@ -6,7 +6,7 @@
 
 bool comments = false;
 bool finishingMove = false;
-bool waitOnStart = true;
+bool waitOnStart = false;
 bool imperial = false;
 int turns = 0;
 int finishingTurns = 0;
@@ -53,8 +53,9 @@ void init(){
           }
         }
        }
-  }
     fclose (fp);
+  }
+
 
     turnsPerDir = (wireGauge != 0) ? shaftLength/wireGauge : 0;
     passes = (turnsPerDir != 0) ? turns/turnsPerDir : 0;
@@ -130,7 +131,8 @@ int main(int argc, char *argv[]) {
   FILE * f = fopen( (name != NULL) ? name : "output.gcode", "w" );
   if (f != NULL){
     gen(f);
+    fclose(f);
   }
-  fclose(f);
+
   return 0;
 }
