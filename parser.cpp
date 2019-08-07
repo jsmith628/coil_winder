@@ -11,7 +11,7 @@
 #define P 5
 
 command com;
-char buffer[BUFFERLENGTH];
+char buffer[BUFFERLENGTH+1];
 
 void display_warning(String type){
   Serial.print("Warning: ");
@@ -54,7 +54,7 @@ void interpret_gcode(command c){
         g21();
         break;
       case 28:
-        g28((c.modifiers[A].f != 0), (c.modifiers[B].f != 0));
+        g28((c.modifiers[A].f == c.modifiers[A].f), (c.modifiers[B].f == c.modifiers[B].f));
         break;
       case 31:
         g31((int8_t)c.modifiers[A].f,(int8_t)(c.modifiers[B].f!=0));
@@ -236,6 +236,7 @@ void parse(size_t s, char* buf){
 
 bool read_command(){
 
+<<<<<<< HEAD
   if (Serial.available()){
     if (space_in_queue() >= MINIMUMSPACE){
       parse(Serial.readBytesUntil('\n', buffer, BUFFERLENGTH), buffer);
@@ -247,6 +248,12 @@ bool read_command(){
       Serial.print(19);
     }
   }
+=======
+    size_t len = Serial.readBytesUntil('\n', buffer, BUFFERLENGTH);
+    buffer[len] = '\0';
+    parse(len, buffer);
+
+>>>>>>> testing
 }
 
 void parser_setup(){
