@@ -26,7 +26,7 @@ void init(){
   char buffer[65];
 
   FILE *fp;
-  fp = fopen ("gen_gcode.conf","r");
+  fp = fopen ("gcode_gen.conf","r");
   if (fp!=NULL){
      while(fgets(&buffer[0], 65, fp) != NULL){
         if ((&buffer[0] != "#")&&(&buffer[0] != " ")){
