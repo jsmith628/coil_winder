@@ -237,24 +237,25 @@ bool read_command(){
 
   static bool xon = true;
 
+  if(!xon && space_in_queue() >= MINIMUMSPACE){
+    Serial.print((char) 17);
+    // Serial.println("Queue open!");
+    xon = true;
+  }
 
-
-  if (Serial.available()){
-    if (space_in_queue() >= MINIMUMSPACE){
-      // if (!xon && space_in_queue() >= MINIMUMSPACE){
-      //   Serial.print((char) 17);
-      //   Serial.println("Queue open!");
-      //   xon = true;
-      // }
+  if(Serial.available()){
+    if(space_in_queue() > 0) {
       size_t len = Serial.readBytesUntil('\n', buffer, BUFFERLENGTH);
       buffer[len] = '\0';
       parse(len, buffer);
-      Serial.println(space_in_queue(), DEC);
-    }else{
-      if(xon) Serial.println("Queue full!");
-      Serial.print((char) 19);
-      xon = false;
+      Serial.println(space_in_queue());
     }
+  }
+
+  if(xon && space_in_queue() < MINIMUMSPACE){
+    // Serial.println("Queue full!");
+    Serial.print((char) 19);
+    xon = false;
   }
 }
 
