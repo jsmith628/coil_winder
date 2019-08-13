@@ -144,15 +144,12 @@ inline float drive_speed(float da, float w, float s, float travel) {
 //control functions
 byte space_in_queue() { return open_jobs(); }
 
-void log_callback(const void* msg) {
+void println_callback(const void* msg) {
   Serial.println((char*) msg);
 }
 
-Job message_job(const char* msg) {
-  Job j = NOOP_JOB;
-  j.callback = log_callback;
-  j.callback_args = msg;
-  return j;
+void print_callback(const void* msg) {
+  Serial.print((char*) msg);
 }
 
 
@@ -332,7 +329,7 @@ void m17() {
     next.jobs[i].en = SET;
   }
   next.jobs[3] = NOOP_JOB;
-  next.jobs[3].callback = log_callback;
+  next.jobs[3].callback = println_callback;
   next.jobs[3].callback_args = "Steppers enabled";
   queue_jobs(next);
 }
@@ -343,19 +340,19 @@ void m17(bool a, bool b, bool c){
   if(a){
     next.jobs[A_AXIS] = NOOP_JOB;
     next.jobs[A_AXIS].en = SET;
-    next.jobs[A_AXIS].callback = log_callback;
+    next.jobs[A_AXIS].callback = println_callback;
     next.jobs[A_AXIS].callback_args = "A-axis enabled";
   }
   if(b){
     next.jobs[B_AXIS] = NOOP_JOB;
     next.jobs[B_AXIS].en = SET;
-    next.jobs[B_AXIS].callback = log_callback;
+    next.jobs[B_AXIS].callback = println_callback;
     next.jobs[B_AXIS].callback_args = "B-axis enabled";
   }
   if(c){
     next.jobs[W_AXIS] = NOOP_JOB;
     next.jobs[W_AXIS].en = SET;
-    next.jobs[W_AXIS].callback = log_callback;
+    next.jobs[W_AXIS].callback = println_callback;
     next.jobs[W_AXIS].callback_args = "W-axis enabled";
   }
   next.jobs[3] = NOOP_JOB;
@@ -371,13 +368,21 @@ void m18() {
     next.jobs[i].en = UNSET;
   }
   next.jobs[3] = NOOP_JOB;
-  next.jobs[3].callback = log_callback;
+  next.jobs[3].callback = println_callback;
   next.jobs[3].callback_args = "Steppers disabled";
   queue_jobs(next);
 }
 
 //End of program, return to program top
-void m30() {}
+void m30() {
+  const char end_msg[2] = {3, '\0'};
+
+  Job j = NOOP_JOB;
+  j.callback = print_callback;
+  j.callback_args = end;
+  
+  queue_jobs({{NOOP_JOB, NOOP_JOB, NOOP_JOB, j}});
+}
 
 //Spindle absolute positioning
 void m82(){set_machine_coords(W_AXIS);}

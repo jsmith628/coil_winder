@@ -20,6 +20,7 @@
 
 #define XON ((char) 17)
 #define XOFF ((char) 19)
+#define ETX ((char) 3)
 
 pthread_mutex_t flow_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t flow_ready = PTHREAD_COND_INITIALIZER;
@@ -65,6 +66,15 @@ struct buf_list* init_page() {
   return page;
 }
 
+bool xflow = true;
+bool echo = false;
+bool interrupt = false;
+
+
+pthread_mutex_t stop_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t stop_ready = PTHREAD_COND_INITIALIZER;
+bool stop = false;
+
 void *cmd_thread(void* arg) {
 
   //read from stdin until we get a new-line. Then, flush the buffer
@@ -95,10 +105,6 @@ void *cmd_thread(void* arg) {
 
 
 }
-
-
-bool xflow = true;
-bool echo = false;
 
 void *write_thread(void* arg) {
   //get the file descriptor
@@ -165,6 +171,8 @@ void *read_thread(void* arg) {
         notify(&flow_ready, &flow_lock, &flow_on);
       } else if(xflow && x==XOFF) { //block the writing thread if we get an XOFF
         lock_set(&flow_lock, &flow_on, false);
+      } else if(interrupt && x==ETX) {
+        notify(&stop_ready, &stop_lock, &stop);
       } else { //else, just parrot to stdout
         fputc(x, stdout);
       }
@@ -192,8 +200,8 @@ int init_device_termios(int device) {
   config.c_cflag &= ~(CSTOPB | PARENB | CSIZE | CBAUD);
   config.c_cflag |= CRTSCTS | CS8 | B115200;
 
-  config.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL | ICANON | FLUSHO | TOSTOP);
-  config.c_lflag |= NOFLSH | ISIG | IEXTEN;
+  config.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL | ICANON | FLUSHO | TOSTOP | ISIG);
+  config.c_lflag |= NOFLSH | IEXTEN;
 
   // config.c_cc[VEOL] = '\n';
   config.c_cc[VSTART] = XON;
@@ -216,12 +224,16 @@ int main(int argc, char const *argv[]) {
     else if(!strcmp(argv[i],"--noecho")) echo=false;
     else if(!strcmp(argv[i],"--xflow")) xflow=true;
     else if(!strcmp(argv[i],"--noxflow")) xflow=false;
+    else if(!strcmp(argv[i],"--int")) interrupt=true;
+    else if(!strcmp(argv[i],"--noint")) interrupt=false;
     else if(argv[i][0] == '-' && argv[i][1] != '-' && argv[i][1] != '\0') {
       for(char const * x = &argv[i][1]; *x!='\0'; x++) {
         if(*x=='e') echo=true;
         else if(*x=='E') echo=false;
         else if(*x=='x') xflow=true;
         else if(*x=='X') xflow=false;
+        else if(*x=='i') interrupt=true;
+        else if(*x=='I') interrupt=false;
         else {
           fprintf(stderr, "Invalid option \'%s\'\n", argv[i]);
           return 1;
@@ -260,9 +272,7 @@ int main(int argc, char const *argv[]) {
     return 1;
   }
 
-
-  pthread_join(t1, NULL);
-  pthread_join(t2, NULL);
+  wait_until(&stop_ready, &stop_lock, &stop);
 
   return 0;
 }
