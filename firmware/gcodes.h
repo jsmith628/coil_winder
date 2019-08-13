@@ -81,8 +81,8 @@ void m99();
 void m112();
 
 //Current position
-float m114();
-void m114(bool a, bool b);
+void m114();
+void m114(bool a, bool b, bool w);
 
 //Enable software endstops
 void m120();

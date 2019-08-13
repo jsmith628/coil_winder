@@ -408,7 +408,7 @@ void m112() {
 }
 
 //Current position
-float m114() {
+void m114() {
   for(byte i=0; i<NUM_AXES; i++) {
     Serial.print(axes[i].name);
     Serial.print("=");
@@ -418,7 +418,24 @@ float m114() {
   Serial.println();
 }
 
-void m114(bool a, bool b) {}
+void m114(bool a, bool b, bool w) {
+  if(a) {
+    Serial.print("A=");
+    Serial.print(axes[0].pos);
+    Serial.print(" ");
+  }
+  if(b) {
+    Serial.print("B=");
+    Serial.print(axes[1].pos);
+    Serial.print(" ");
+  }
+  if(w) {
+    Serial.print("W=");
+    Serial.print(axes[2].pos);
+    Serial.print(" ");
+  }
+  Serial.println();
+}
 
 //Enable software endstops
 void m120() {

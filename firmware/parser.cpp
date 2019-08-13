@@ -117,8 +117,8 @@ void interpret_gcode(command c){
         m112();
         break;
       case 114:
-          if((c.modifiers[A].c != 0)||(c.modifiers[B].c != 0)){
-            m114((c.modifiers[A].f != 0), (c.modifiers[B].f != 0));
+          if((c.modifiers[A].c != 0)||(c.modifiers[B].c != 0)||(c.modifiers[W].c != 0)){
+            m114((c.modifiers[A].c != 0), (c.modifiers[B].c != 0), (c.modifiers[W].c != 0));
           }else{
             m114();
           }
