@@ -182,7 +182,7 @@ void parse(size_t s, char* buf){
     //A, B, S, F, D/P, R
 
     while (x < s){
-      if(*buf = ';')break;
+      if(*buf == ';')break;
       if (isAlpha(*buf)){
         if(*buf == 'G' || *buf == 'M'){
           interpret_gcode(c);
