@@ -115,6 +115,8 @@ struct JobProgress {
   volatile u32 remaining = 0;
   volatile AccelsLUT accels;
   volatile EndConditionType end;
+  void (* volatile callback)(const void*) = NULL;
+  const void * volatile callback_args = NULL;
 } current_jobs[SUBJOBS_PER_JOB];
 
 //to be run in the ISRs
@@ -192,7 +194,8 @@ void clear_jobs() {
 
 inline bool idempotent(Job j) {
   return j.en==KEEP && j.dir==KEEP &&
-  (j.frequency==0 || j.end.ty!=IMMEDIATE || j.end.ty==COUNT&&j.end.cond==0);
+  (j.frequency==0 || j.end.ty!=IMMEDIATE || j.end.ty==COUNT&&j.end.cond==0) &&
+  j.callback == NULL;
 }
 
 bool queue_jobs(Jobs j) {
@@ -224,6 +227,13 @@ bool job_done() {
 bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || job_done();}
 
 void machine_loop() {
+
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+    if(!current_jobs[i].running && current_jobs[i].callback!=NULL) {
+      (*current_jobs[i].callback)(current_jobs[i].callback_args);
+      current_jobs[i].callback = NULL;
+    }
+  }
 
   // static int last_time = millis();
   //
@@ -291,12 +301,15 @@ void machine_loop() {
                   break;
               }
               break;
-            case FOREVER: current_jobs[i].running = true; break;
+            case FOREVER: current_jobs[id].running = true; break;
             case IMMEDIATE: break;
           }
 
-          //setup the timers
+          //setup the callback
+          current_jobs[id].callback = next.callback;
+          current_jobs[id].callback_args = next.callback_args;
 
+          //setup the timers
 
           //clear the timer value
           set_timer_count(id,0);

@@ -144,6 +144,18 @@ inline float drive_speed(float da, float w, float s, float travel) {
 //control functions
 byte space_in_queue() { return open_jobs(); }
 
+void log_callback(const void* msg) {
+  Serial.println((char*) msg);
+}
+
+Job message_job(const char* msg) {
+  Job j = NOOP_JOB;
+  j.callback = log_callback;
+  j.callback_args = msg;
+  return j;
+}
+
+
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis position, B axis position, Spindle rotations, Speed, Feedrate)
@@ -208,10 +220,16 @@ void g4 (float p, float s) {
 }
 
 //Programming in inches
-void g20 () { set_units(25.4); }
+void g20 () {
+  set_units(25.4);
+  Serial.println("Using Inches");
+}
 
 //Programming in millimeters
-void g21 () { set_units(1.0); }
+void g21 () {
+  set_units(1.0);
+  Serial.println("Using Millimeters");
+}
 
 //Home axis (A final position, B final position)
 void g28 (bool a, bool b) {
@@ -314,7 +332,8 @@ void m17() {
     next.jobs[i].en = SET;
   }
   next.jobs[3] = NOOP_JOB;
-  Serial.println("Steppers Enabled");
+  next.jobs[3].callback = log_callback;
+  next.jobs[3].callback_args = "Steppers enabled";
   queue_jobs(next);
 }
 
@@ -324,22 +343,23 @@ void m17(bool a, bool b, bool c){
   if(a){
     next.jobs[A_AXIS] = NOOP_JOB;
     next.jobs[A_AXIS].en = SET;
+    next.jobs[A_AXIS].callback = log_callback;
+    next.jobs[A_AXIS].callback_args = "A-axis enabled";
   }
   if(b){
     next.jobs[B_AXIS] = NOOP_JOB;
     next.jobs[B_AXIS].en = SET;
+    next.jobs[B_AXIS].callback = log_callback;
+    next.jobs[B_AXIS].callback_args = "B-axis enabled";
   }
   if(c){
     next.jobs[W_AXIS] = NOOP_JOB;
     next.jobs[W_AXIS].en = SET;
+    next.jobs[W_AXIS].callback = log_callback;
+    next.jobs[W_AXIS].callback_args = "W-axis enabled";
   }
   next.jobs[3] = NOOP_JOB;
 
-  Serial.print("Steppers ");
-  Serial.print((a ?"A " : ""));
-  Serial.print((b ?"B " : ""));
-  Serial.print((c ?"C " : ""));
-  Serial.println("Enabled");
   queue_jobs(next);
 }
 
@@ -351,7 +371,8 @@ void m18() {
     next.jobs[i].en = UNSET;
   }
   next.jobs[3] = NOOP_JOB;
-  Serial.println("Steppers Disabled");
+  next.jobs[3].callback = log_callback;
+  next.jobs[3].callback_args = "Steppers disabled";
   queue_jobs(next);
 }
 
@@ -383,6 +404,7 @@ void m112() {
   digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
   digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
   clear_jobs();
+  Serial.println("Emergency Stop!");
 }
 
 //Current position
