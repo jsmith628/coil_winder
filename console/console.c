@@ -96,6 +96,10 @@ void *cmd_thread(void* arg) {
 
 }
 
+
+bool xflow = true;
+bool echo = false;
+
 void *write_thread(void* arg) {
   //get the file descriptor
   int dev = *(int*) arg;
@@ -127,8 +131,8 @@ void *write_thread(void* arg) {
       wait_until(&cmd_ready, &cmd_lock, &cmd_on);
     } else {
       //write the line to the device
-      // printf("Writing!\n");
       write(dev, cmd_buffer_back->buf, cmd_buffer_back->size);
+      if(echo) fwrite(cmd_buffer_back->buf, 1, cmd_buffer_back->size, stdout);
 
       //pop the line off of the buffer
       struct buf_list* next = cmd_buffer_back->next;
@@ -145,8 +149,6 @@ void *write_thread(void* arg) {
 
 }
 
-bool x_flow = true;
-
 void *read_thread(void* arg) {
 
   //get the file-descriptor
@@ -159,9 +161,9 @@ void *read_thread(void* arg) {
     size_t count = read(dev, &x, 1);
 
     if(count) { //make sure no error happened
-      if(x_flow && x==XON) { //unblock the writing thread if we get an XON
+      if(xflow && x==XON) { //unblock the writing thread if we get an XON
         notify(&flow_ready, &flow_lock, &flow_on);
-      } else if(x_flow && x==XOFF) { //block the writing thread if we get an XOFF
+      } else if(xflow && x==XOFF) { //block the writing thread if we get an XOFF
         lock_set(&flow_lock, &flow_on, false);
       } else { //else, just parrot to stdout
         fputc(x, stdout);
@@ -207,26 +209,54 @@ int init_device_termios(int device) {
 
 int main(int argc, char const *argv[]) {
 
+  //parse the command line options
+  char const * device_name = NULL;
+  for(int i=1; i<argc; i++) {
+    if(!strcmp(argv[i],"--echo")) echo=true;
+    else if(!strcmp(argv[i],"--noecho")) echo=false;
+    else if(!strcmp(argv[i],"--xflow")) xflow=true;
+    else if(!strcmp(argv[i],"--noxflow")) xflow=false;
+    else if(argv[i][0] == '-' && argv[i][1] != '-' && argv[i][1] != '\0') {
+      for(char const * x = &argv[i][1]; *x!='\0'; x++) {
+        if(*x=='e') echo=true;
+        else if(*x=='E') echo=false;
+        else if(*x=='x') xflow=true;
+        else if(*x=='X') xflow=false;
+        else {
+          fprintf(stderr, "Invalid option \'%s\'\n", argv[i]);
+          return 1;
+        }
+      }
+    } else if(device_name==NULL) {
+      device_name = argv[i];
+    } else {
+      fprintf(stderr, "Invalid option \"%s\"\n", argv[i]);
+      return 1;
+    }
+  }
+
   //make sure we got a path
-  if(argc<=1) {
-    printf("Please provide a serial port!\n");
+  if(device_name==NULL) {
+    fprintf(stderr, "Please provide a serial port!\n");
     return 1;
   }
 
   //open the file
-  int device = open(argv[1], O_RDWR | O_DSYNC | O_SYNC);
+  int device = open(device_name, O_RDWR | O_DSYNC | O_SYNC);
   if(device == -1){
-    printf("Error opening device!\n");
+    fprintf(stderr, "Error opening device!\n");
     return 1;
   }
 
   int err = init_device_termios(device);
   if(err) return err;
 
+  usleep(1000000);
+
   pthread_t t1,t2;
 
   if(pthread_create(&t1, NULL, read_thread, &device) || pthread_create(&t2, NULL, write_thread, &device)){
-    printf("Thread creation error!\n");
+    fprintf(stderr, "Thread creation error!\n");
     return 1;
   }
 
