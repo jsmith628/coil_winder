@@ -77,7 +77,7 @@ enum EndConditionType: uint8_t {
 
 typedef struct {
   EndConditionType ty;
-  uint16_t cond;
+  uint32_t cond;
 } EndCondition;
 
 enum PinOption: uint8_t { KEEP=0, SET, UNSET };

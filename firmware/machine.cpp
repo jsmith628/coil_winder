@@ -182,8 +182,11 @@ int32_t drive_freq = 0;
 bool drive_dir = false;
 
 void clear_jobs() {
+  cli();
   job_queue.clear();
+  job_size_queue.clear();
   for(byte i=0; i<SUBJOBS_PER_JOB; current_jobs[i++].running = false);
+  sei();
 }
 
 bool queue_jobs(Jobs j) {
@@ -283,27 +286,6 @@ void machine_loop() {
           if(current_jobs[i].running) {
             *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
             *timers[i].timsk = 2; //enable interrupt of OCRnA
-
-            // const byte max = 10;
-            // current_jobs[i].accels.current = 0;
-            // current_jobs[i].accels.num = max;
-            //
-            // uint16_t start = next[i].frequency/4;
-            // uint16_t end = next[i].frequency;
-            //
-            // float duration = 1.0;
-            //
-            // for(byte j=0; j<max; j++) {
-            //   byte prescaling = 1;
-            //   uint16_t period = get_timer_period(start + j*(end-start)/max, &prescaling, timers[i].mask);
-            //   current_jobs[i].accels.periods[j] = period;
-            //   current_jobs[i].accels.prescaling[j] = prescaling;
-            //   current_jobs[i].accels.intervals[j] = (uint16_t) ((duration * AVR_CLK_FREQ) / period);
-            // }
-            // current_jobs[i].accels.time = current_jobs[i].accels.intervals[0];
-            //
-            // *timers[i].ocra = current_jobs[i].accels.periods[0];
-            // *timers[i].tccrnb |= current_jobs[i].accels.prescaling[0];
 
             byte prescaling = 1;
             set_timer_period(i,get_timer_period(i, next[i].frequency, &prescaling));
