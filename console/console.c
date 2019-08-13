@@ -102,12 +102,11 @@ void *write_thread(void* arg) {
 
   //setup the buffer
   pthread_mutex_lock(&buf_lock);
-
   cmd_buffer_back = init_page();
   cmd_buffer_front = cmd_buffer_back;
-
   pthread_mutex_unlock(&buf_lock);
 
+  //create the thread that reads stdin and constructs the buffer
   pthread_t t;
   pthread_create(&t, NULL, cmd_thread, NULL);
 
@@ -146,6 +145,8 @@ void *write_thread(void* arg) {
 
 }
 
+bool x_flow = true;
+
 void *read_thread(void* arg) {
 
   //get the file-descriptor
@@ -157,19 +158,50 @@ void *read_thread(void* arg) {
     char x;
     size_t count = read(dev, &x, 1);
 
-    if(count) {
-      if(x==XON) {
+    if(count) { //make sure no error happened
+      if(x_flow && x==XON) { //unblock the writing thread if we get an XON
         notify(&flow_ready, &flow_lock, &flow_on);
-      } else if(x==XOFF) {
+      } else if(x_flow && x==XOFF) { //block the writing thread if we get an XOFF
         lock_set(&flow_lock, &flow_on, false);
-      } else {
+      } else { //else, just parrot to stdout
         fputc(x, stdout);
       }
     }
 
+  }
+}
 
+int init_device_termios(int device) {
+  //configure the serial port
 
+  struct termios config;
 
+  if(tcgetattr(device, &config)) {
+    printf("Error getting serial port config!\n");
+    return 1;
+  }
+
+  config.c_iflag &= ~(IGNBRK | ICRNL | IMAXBEL | INLCR | IUTF8 | IXANY | IUCLC | IXOFF | IXON);
+  config.c_iflag |= BRKINT;
+
+  config.c_oflag &= ~(OCRNL | ONLCR | NLDLY);
+  config.c_oflag |= NL0 | OPOST | OLCUC;
+
+  config.c_cflag &= ~(CSTOPB | PARENB | CSIZE | CBAUD);
+  config.c_cflag |= CRTSCTS | CS8 | B115200;
+
+  config.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL | ICANON | FLUSHO | TOSTOP);
+  config.c_lflag |= NOFLSH | ISIG | IEXTEN;
+
+  // config.c_cc[VEOL] = '\n';
+  config.c_cc[VSTART] = XON;
+  config.c_cc[VSTOP] = XOFF;
+  config.c_cc[VMIN] = 1;
+  config.c_cc[VTIME] = 0;
+
+  if(tcsetattr(device, TCSANOW, &config)) {
+    printf("Error configuring serial port!\n");
+    return 1;
   }
 }
 
@@ -188,35 +220,8 @@ int main(int argc, char const *argv[]) {
     return 1;
   }
 
-  //configure the serial port
-
-  struct termios config;
-
-  if(tcgetattr(device, &config)) {
-    printf("Error getting serial port config!\n");
-    return 1;
-  }
-
-  config.c_iflag &= ~(BRKINT | ICRNL | IMAXBEL | INLCR | IUTF8 | IXANY | IXON | IXOFF);
-  config.c_iflag |= IGNBRK;
-
-  config.c_oflag &= ~(OCRNL | ONLCR | NLDLY);
-  config.c_oflag |= NL0 | OPOST;
-
-  config.c_cflag &= ~(CRTSCTS | CSTOPB | PARENB | CSIZE | CBAUD);
-  config.c_cflag |= CS8 | B115200;
-
-  config.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL | ICANON | IEXTEN);
-  config.c_lflag |= NOFLSH | ISIG;
-
-  config.c_cc[VEOL] = '\n';
-  config.c_cc[VSTART] = XON;
-  config.c_cc[VSTOP] = XOFF;
-
-  if(tcsetattr(device, TCSANOW, &config)) {
-    printf("Error configuring serial port!\n");
-    return 1;
-  }
+  int err = init_device_termios(device);
+  if(err) return err;
 
   pthread_t t1,t2;
 
