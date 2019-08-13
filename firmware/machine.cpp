@@ -176,7 +176,8 @@ ISR(TIMER3_COMPA_vect) { do_job(0); }
 ISR(TIMER4_COMPA_vect) { do_job(1); }
 ISR(TIMER5_COMPA_vect) { do_job(2); }
 
-Queue<Jobs,6> job_queue = Queue<Jobs,6>();
+Queue<Job,6> job_queue = Queue<Job,6>();
+Queue<byte,6> job_size_queue = Queue<byte,6>();
 
 int32_t drive_freq = 0;
 bool drive_dir = false;
@@ -189,12 +190,26 @@ void clear_jobs() {
   sei();
 }
 
+inline bool idempotent(Job j) {
+  return j.en==KEEP && j.dir==KEEP &&
+  (j.frequency==0 || j.end.ty!=IMMEDIATE || j.end.ty==COUNT&&j.end.cond==0);
+}
+
 bool queue_jobs(Jobs j) {
-  return job_queue.push_bottom(j);
+  byte count = 0;
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+    if(!idempotent(j.jobs[i])) {
+      count++;
+      j.jobs[i].axis = i;
+      if(!job_queue.push_bottom(j.jobs[i])) return false;
+    }
+  }
+
+  return job_size_queue.push_bottom(count);
 }
 
 byte open_jobs() {
-  return (byte) min(job_queue.capacity() - job_queue.count(), 255);
+  return (byte) min(min(job_queue.capacity() - job_queue.count(), job_size_queue.capacity() - job_size_queue.count()), 255);
 }
 
 bool job_done() {
@@ -206,7 +221,7 @@ bool job_done() {
   return true;
 }
 
-bool busy() { return job_queue.count()>0 || job_done();}
+bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || job_done();}
 
 void machine_loop() {
 
@@ -224,40 +239,48 @@ void machine_loop() {
   if(job_done()) {
 
     //enact the next job if there is one
-    if(job_queue.count()>0){
-      Jobs j = job_queue.pop_top();
-      Job next[SUBJOBS_PER_JOB] = {j.jobs[0],j.jobs[1],j.jobs[2],j.jobs[3]};
-
-      //set the dir pins
-      if(next[0].dir!=KEEP) digitalWrite(DIR_FEED, next[0].dir==SET ^ FEED_INVERT_DIR ? HIGH : LOW);
-      if(next[1].dir!=KEEP) digitalWrite(DIR_CLAMP, next[1].dir==SET ^ CLAMP_INVERT_DIR ? HIGH : LOW);
-      if(next[2].dir!=KEEP) digitalWrite(DIR_DRIVE, next[2].dir==SET ^ DRIVE_INVERT_DIR ? HIGH : LOW);
-
-      //set the enable pins
-      if(next[0].en!=KEEP) digitalWrite(EN_FEED, next[0].en==SET ^ FEED_INVERT_EN ? HIGH : LOW);
-      if(next[1].en!=KEEP) digitalWrite(EN_CLAMP, next[1].en==SET ^ CLAMP_INVERT_EN ? HIGH : LOW);
-      if(next[2].en!=KEEP) digitalWrite(EN_DRIVE, next[2].en==SET ^ DRIVE_INVERT_EN ? HIGH : LOW);
+    if(job_size_queue.count()>0){
+      byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens
 
-        for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+        //loop over all the new jobs
+        for(byte i=0; i<count; i++) {
+          Job next = job_queue.pop_top();
+          byte id = next.axis;
+
+          if(next.dir!=KEEP) {
+            switch(id) {
+              case 0: digitalWrite(DIR_FEED, next.dir==SET ^ FEED_INVERT_DIR ? HIGH : LOW); break;
+              case 1: digitalWrite(DIR_CLAMP, next.dir==SET ^ CLAMP_INVERT_DIR ? HIGH : LOW); break;
+              case 2: digitalWrite(DIR_DRIVE, next.dir==SET ^ DRIVE_INVERT_DIR ? HIGH : LOW); break;
+            }
+          }
+
+          if(next.en!=KEEP) {
+            switch(id) {
+              case 0: digitalWrite(EN_FEED, next.dir==SET ^ FEED_INVERT_EN ? HIGH : LOW); break;
+              case 1: digitalWrite(EN_CLAMP, next.dir==SET ^ CLAMP_INVERT_EN ? HIGH : LOW); break;
+              case 2: digitalWrite(EN_DRIVE, next.dir==SET ^ DRIVE_INVERT_EN ? HIGH : LOW); break;
+            }
+          }
 
           //setup the end-condition, get if this job is already over
           //and setup how many cycles are remaining
-          EndCondition end = next[i].end;
-          current_jobs[i].end = end.ty;
-          current_jobs[i].running = false;
+          EndCondition end = next.end;
+          current_jobs[id].end = end.ty;
+          current_jobs[id].running = false;
 
           switch(end.ty) {
             case COUNT:
-              if(end.cond > 0 && next[i].frequency > 0) {
-                current_jobs[i].remaining = end.cond;
-                current_jobs[i].running = true;
+              if(end.cond > 0 && next.frequency > 0) {
+                current_jobs[id].remaining = end.cond;
+                current_jobs[id].running = true;
               }
               break;
             case STALL_GUARD:
-              current_jobs[i].running = true;
-              switch(i) {
+              current_jobs[id].running = true;
+              switch(id) {
                 case 0:
                   feed.sgt(end.cond);
                   attachInterrupt(digitalPinToInterrupt(SG_FEED), sg_0, RISING);
@@ -276,34 +299,36 @@ void machine_loop() {
 
 
           //clear the timer value
-          set_timer_count(i,0);
+          set_timer_count(id,0);
 
           //clear the config
           //note we don't need prescaling because we wont really need events triggering
           //more than once a second
-          *timers[i].tccrna = 0;
+          *timers[id].tccrna = 0;
 
-          if(current_jobs[i].running) {
-            *timers[i].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
-            *timers[i].timsk = 2; //enable interrupt of OCRnA
+          if(current_jobs[id].running) {
+            *timers[id].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
+            *timers[id].timsk = 2; //enable interrupt of OCRnA
 
             byte prescaling = 1;
-            set_timer_period(i,get_timer_period(i, next[i].frequency, &prescaling));
+            set_timer_period(i,get_timer_period(id, next.frequency, &prescaling));
 
-            *timers[i].tccrnb |= prescaling;
+            *timers[id].tccrnb |= prescaling;
 
-            // Serial.print(next[i].frequency);
+            // Serial.print(next.axis);
+            // Serial.print(" ");
+            // Serial.print(next.frequency);
             // Serial.print(" ");
             // Serial.print(get_timer_period(i));
             // Serial.print(" ");
-            // Serial.print(*timers[i].tccrnb,BIN);
+            // Serial.print(*timers[id].tccrnb,BIN);
             // Serial.print(" ");
             // Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
-            *timers[i].tccrnb = 0; //clear the timer when it reaches OCRnA
-            *timers[i].timsk = 0;
-            set_timer_period(i,0);
+            *timers[id].tccrnb = 0; //clear the timer when it reaches OCRnA
+            *timers[id].timsk = 0;
+            set_timer_period(id,0);
           }
 
         }

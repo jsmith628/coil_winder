@@ -60,7 +60,7 @@
 #define CLAMP_STEP_RANGE (int32_t) (CLAMP_RANGE * CLAMP_STEPS_PER_MM)
 
 #define SUBJOBS_PER_JOB 4
-#define NOOP_JOB {KEEP, KEEP, 0, {IMMEDIATE, 0} }
+#define NOOP_JOB {0, KEEP, KEEP, 0, {IMMEDIATE, 0} }
 
 #include "queue.h"
 
@@ -83,6 +83,7 @@ typedef struct {
 enum PinOption: uint8_t { KEEP=0, SET, UNSET };
 
 typedef struct {
+  byte axis;
   PinOption dir;
   PinOption en;
   u16 frequency;
