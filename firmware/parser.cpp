@@ -1,4 +1,5 @@
 
+#include "ascii_control.h"
 #include "parser.h"
 #include "gcodes.h"
 #include <Arduino.h>
@@ -227,9 +228,19 @@ void parse(size_t s, char* buf){
     interpret_gcode(c);
 
   } else {
+
+    if(*buf == EOT) { m30();}
+    else if(*buf == ENQ){Serial.print(space_in_queue() >= MINIMUMSPACE ? ACK : NAK);}
+    else if(*buf == CAN){cancel_last_command();}
+    else if(*buf == ETX){
+      m112();
+      Serial.print(ETX);
+    } else {
       c.type = 0;
       c.number = 0;
       interpret_gcode(c);
+    }
+
   }
 }
 
@@ -239,7 +250,7 @@ bool read_command(){
   static bool xon = true;
 
   if(!xon && space_in_queue() >= MINIMUMSPACE){
-    Serial.print((char) 17);
+    Serial.print(XON);
     // Serial.println("Queue open!");
     xon = true;
   }
@@ -255,7 +266,7 @@ bool read_command(){
 
   if(xon && space_in_queue() < MINIMUMSPACE){
     // Serial.println("Queue full!");
-    Serial.print((char) 19);
+    Serial.print(XOFF);
     xon = false;
   }
 }

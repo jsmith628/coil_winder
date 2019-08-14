@@ -2,7 +2,12 @@
   #define _GCODE_H_
 
 //control functions
+
+//returns the min number of commands available in the queue
 uint8_t space_in_queue();
+
+//cancels the last command put into the queue (assuming it hasn't started yet)
+void cancel_last_command();
 
 //G codes define movement and interpretation commands
 

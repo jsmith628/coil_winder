@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include "gcodes.h"
 #include "machine.h"
+#include "ascii_control.h"
 
 #define DEFAULT_SPEED 1
 
@@ -142,7 +143,15 @@ inline float drive_speed(float da, float w, float s, float travel) {
 
 
 //control functions
+
+//returns the min number of commands available in the queue
 byte space_in_queue() { return open_jobs(); }
+
+//cancels the last command put into the queue (assuming it hasn't started yet)
+void cancel_last_command() {
+  Serial.println("Canceling last command");
+  // cancel_last_job();
+}
 
 void println_callback(const void* msg) {
   Serial.println((char*) msg);
@@ -373,14 +382,15 @@ void m18() {
   queue_jobs(next);
 }
 
+void print_eot(const void* arg) { Serial.print(EOT); }
+
 //End of program, return to program top
 void m30() {
-  const char end_msg[2] = {3, '\0'};
 
   Job j = NOOP_JOB;
-  j.callback = print_callback;
-  j.callback_args = end;
-  
+  j.callback = print_eot;
+  j.callback_args = NULL;
+
   queue_jobs({{NOOP_JOB, NOOP_JOB, NOOP_JOB, j}});
 }
 

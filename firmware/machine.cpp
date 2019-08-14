@@ -211,6 +211,12 @@ bool queue_jobs(Jobs j) {
   return job_size_queue.push_bottom(count);
 }
 
+// void cancel_last_job() {
+  // if(job_size_queue.count > 0) {
+  //   for(byte i = job_size_queue.pop_bottom(); i>0; i--, job_queue.pop_bottom());
+  // }
+// }
+
 byte open_jobs() {
   return (byte) min(min(job_queue.capacity() - job_queue.count(), job_size_queue.capacity() - job_size_queue.count()), 255);
 }
