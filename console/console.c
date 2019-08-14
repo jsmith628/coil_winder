@@ -100,7 +100,7 @@ void *cmd_thread(void* arg) {
     size_t count = fread(&x, 1, 1, stdin);
 
     //if stdin was closed, set x to EOT
-    if(count==0 || x==EOT) x = EOT;
+    if(count==0) x = EOT;
 
     pthread_mutex_lock(&buf_lock);
 
@@ -204,7 +204,7 @@ void *read_thread(void* arg) {
     char x;
     size_t count = read(dev, &x, 1);
 
-    if(count) { //make sure no error happened
+    if(count) { //make sure the port is still open
       pthread_mutex_lock(&eot_lock);
       if(xflow && x==XON) { //unblock the writing thread if we get an XON
         notify(&flow_ready, &flow_lock, &flow_on);
@@ -216,6 +216,10 @@ void *read_thread(void* arg) {
         fputc(x, stdout);
       }
       pthread_mutex_unlock(&eot_lock);
+    } else { //else, exit
+      fprintf(stderr, "Serial port closed. Exiting\n");
+      notify(&stop_ready, &stop_lock, &stop);
+      break;
     }
 
   }
