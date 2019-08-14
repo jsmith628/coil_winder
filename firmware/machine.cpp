@@ -330,19 +330,19 @@ void machine_loop() {
             *timers[id].timsk = 2; //enable interrupt of OCRnA
 
             byte prescaling = 1;
-            set_timer_period(i,get_timer_period(id, next.frequency, &prescaling));
+            set_timer_period(id,get_timer_period(id, next.frequency, &prescaling));
 
             *timers[id].tccrnb |= prescaling;
 
-            // Serial.print(next.axis);
-            // Serial.print(" ");
-            // Serial.print(next.frequency);
-            // Serial.print(" ");
-            // Serial.print(get_timer_period(i));
-            // Serial.print(" ");
-            // Serial.print(*timers[id].tccrnb,BIN);
-            // Serial.print(" ");
-            // Serial.println(end.cond);
+            Serial.print(next.axis);
+            Serial.print(" ");
+            Serial.print(next.frequency);
+            Serial.print(" ");
+            Serial.print(get_timer_period(id));
+            Serial.print(" ");
+            Serial.print(*timers[id].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.println(end.cond);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0; //clear the timer when it reaches OCRnA
