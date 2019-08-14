@@ -233,13 +233,20 @@ int init_device(int device) {
   config.c_cc[VSTOP] = XOFF;
   config.c_cc[VTIME] = 0;
 
-  config.c_cc[VMIN] = 1;
+  config.c_cc[VMIN] = 0;
   if(tcsetattr(device, TCSANOW, &config)) {
     printf("Error configuring serial port!\n");
     return 1;
   }
 
+  //delay until we get a message or time-out to make sure we've properly connected
+  for(int i=0, x=0; i<5000 && !read(device, &x, 1); i++) usleep(1000);
 
+  config.c_cc[VTIME] = 0;
+  if(tcsetattr(device, TCSANOW, &config)) {
+    printf("Error configuring serial port!\n");
+    return 1;
+  }
 
 }
 
@@ -302,7 +309,6 @@ int main(int argc, char const *argv[]) {
   int err = init_device(device);
   if(err) return err;
 
-  usleep(1000000);
 
   signal(SIGINT, signal_handler);
 
