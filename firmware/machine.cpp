@@ -15,25 +15,6 @@ typedef unsigned long u32;
 Stepper clamp = Stepper(EN_CLAMP, DIR_CLAMP, STEP_CLAMP, CS_CLAMP);
 Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
 
-
-inline void step_clamp() {
-  static bool step = false;
-  step = !step;
-  digitalWrite(STEP_CLAMP,step?HIGH:LOW);
-}
-
-inline void step_feed() {
-  static bool step = false;
-  step = !step;
-  digitalWrite(STEP_FEED,step?HIGH:LOW);
-}
-
-inline void step_drive() {
-  static bool step = false;
-  step = !step;
-  digitalWrite(STEP_DRIVE,step?HIGH:LOW);
-}
-
 const byte prescaling_16_bit[6] = {1,3,3,2,2,0};
 const byte prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
 
@@ -99,84 +80,44 @@ uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
   return (uint16_t) period;
 }
 
-#define LUT_LENGTH 16
-
-typedef struct {
-  byte current = 0, num = 0;
-  byte prescaling[LUT_LENGTH];
-  uint16_t periods[LUT_LENGTH];
-  uint16_t time = 0;
-  uint16_t intervals[LUT_LENGTH];
-} AccelsLUT;
-
-
 struct JobProgress {
   volatile bool running = false;
   volatile u32 remaining = 0;
-  volatile AccelsLUT accels;
   volatile EndConditionType end;
   void (* volatile callback)(const void*) = NULL;
   const void * volatile callback_args = NULL;
 } current_jobs[SUBJOBS_PER_JOB];
 
+#define DO_STEP_FEED() STEP_FEED_PORT ^= STEP_FEED_BIT
+#define DO_STEP_CLAMP() STEP_CLAMP_PORT ^= STEP_CLAMP_BIT
+#define DO_STEP_DRIVE() STEP_DRIVE_PORT ^= STEP_DRIVE_BIT
+#define DO_STEP_NOOP()
+
 //to be run in the ISRs
-inline void do_job(byte id) {
-
-  //dont do anything if we're done
-  if(current_jobs[id].running){
-
-    //step the proper stepper
-    switch(id) {
-      case 2: step_drive(); break;
-      case 0: step_feed(); break;
-      case 1: step_clamp(); break;
-    }
-
-    //check if we need to stop this job
-    if(current_jobs[id].end == COUNT) {
-      //update the progress, and check if we've hit 0
-      if((--current_jobs[id].remaining) == 0) {
-        //mark this job as done
-        current_jobs[id].running = false;
-        *timers[id].tccrnb = 0; //if we're done we don't need to run this interrupt again
-        *timers[id].timsk = 0; //if we're done we don't need to run this interrupt again
-      }
-    }
-
-    // byte lut = current_jobs[id].accels.current;
-    // byte num = current_jobs[id].accels.num;
-    //
-    // if(lut < num) {
-    //   if(--current_jobs[id].accels.time == 0) {
-    //     if(++current_jobs[id].accels.current < num) {
-    //       current_jobs[id].accels.time = current_jobs[id].accels.intervals[lut+1];
-    //       *timers[id].tccrnb = (*timers[id].tccrnb & ~0b111) | current_jobs[id].accels.prescaling[lut+1];
-    //       *timers[id].ocra = current_jobs[id].accels.periods[lut+1];
-    //     }
-    //   }
-    // }
-
-  }
-
+#define DO_JOB(id, step) {\
+  step(); \
+  if((--current_jobs[id].remaining) == 0) { \
+    current_jobs[id].running = false; \
+    *timers[id].tccrnb = 0; \
+    *timers[id].timsk = 0; \
+  } \
 }
 
-inline void trigger_sg(byte id) {
-  current_jobs[id].running = false;
-  *timers[id].tccrnb = 0;
-  *timers[id].timsk = 0;
-  switch(id) {
-    case 0: detachInterrupt(digitalPinToInterrupt(SG_FEED)); break;
-    case 1: detachInterrupt(digitalPinToInterrupt(SG_CLAMP)); break;
-  }
+
+#define TRIGGER_SG(id, pin) { \
+  current_jobs[id].running = false; \
+  *timers[id].tccrnb = 0; \
+  *timers[id].timsk = 0; \
+  detachInterrupt(digitalPinToInterrupt(pin)); \
 }
 
-void sg_0(void) {trigger_sg(0);}
-void sg_1(void) {trigger_sg(1);}
+void sg_0(void) {TRIGGER_SG(0, SG_FEED)}
+void sg_1(void) {TRIGGER_SG(1, SG_CLAMP)}
 
-ISR(TIMER2_COMPA_vect) { do_job(3); }
-ISR(TIMER3_COMPA_vect) { do_job(0); }
-ISR(TIMER4_COMPA_vect) { do_job(1); }
-ISR(TIMER5_COMPA_vect) { do_job(2); }
+ISR(TIMER2_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
+ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
+ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
+ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
 
 Queue<Job,6> job_queue = Queue<Job,6>();
 Queue<byte,6> job_size_queue = Queue<byte,6>();
@@ -296,6 +237,7 @@ void machine_loop() {
               break;
             case STALL_GUARD:
               current_jobs[id].running = true;
+              current_jobs[id].remaining = ~0;
               switch(id) {
                 case 0:
                   feed.sgt(end.cond);
@@ -307,7 +249,10 @@ void machine_loop() {
                   break;
               }
               break;
-            case FOREVER: current_jobs[id].running = true; break;
+            case FOREVER:
+              current_jobs[id].running = true;
+              current_jobs[id].remaining = ~0;
+              break;
             case IMMEDIATE: break;
           }
 
@@ -342,10 +287,12 @@ void machine_loop() {
             Serial.print(" ");
             Serial.print(*timers[id].tccrnb,BIN);
             Serial.print(" ");
-            Serial.println(end.cond);
+            Serial.print(end.cond);
+            Serial.print(" ");
+            Serial.println(current_jobs[id].remaining);
           } else {
             //disable the timer interrupt and clear the compare value
-            *timers[id].tccrnb = 0; //clear the timer when it reaches OCRnA
+            *timers[id].tccrnb = 0;
             *timers[id].timsk = 0;
             set_timer_period(id,0);
           }
