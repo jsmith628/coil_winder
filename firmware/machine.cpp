@@ -35,6 +35,7 @@ Timer timers[4] = {
   {16, 0xFFFF0000, prescaling_16_bit, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &TIMSK3},
   {16, 0xFFFF0000, prescaling_16_bit, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &TIMSK4},
   {16, 0xFFFF0000, prescaling_16_bit, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &TIMSK5},
+  // {16, 0xFFFF0000, prescaling_16_bit, &TCCR1A, &TCCR1B, &TCNT1, &OCR1A, &TIMSK1},
   {8, 0xFFFFFF00, prescaling_timer_2, &TCCR2A, &TCCR2B, &TCNT2, &OCR2A, &TIMSK2},
   // {8, 0xFFFFFF00, prescaling_timer_2, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &TIMSK1},
 };
@@ -88,26 +89,27 @@ struct JobProgress {
   const void * volatile callback_args = NULL;
 } current_jobs[SUBJOBS_PER_JOB];
 
-#define DO_STEP_FEED() STEP_FEED_PORT ^= STEP_FEED_BIT
-#define DO_STEP_CLAMP() STEP_CLAMP_PORT ^= STEP_CLAMP_BIT
-#define DO_STEP_DRIVE() STEP_DRIVE_PORT ^= STEP_DRIVE_BIT
+#define STOP_JOB(id) { \
+  current_jobs[id].running = false; \
+  *timers[id].tccrnb = 0; \
+  *timers[id].timsk = 0; \
+}
+
+#define DO_STEP_FEED() (STEP_FEED_PORT ^= STEP_FEED_BIT)
+#define DO_STEP_CLAMP() (STEP_CLAMP_PORT ^= STEP_CLAMP_BIT)
+#define DO_STEP_DRIVE() (STEP_DRIVE_PORT ^= STEP_DRIVE_BIT)
 #define DO_STEP_NOOP()
 
 //to be run in the ISRs
-#define DO_JOB(id, step) {\
+#define DO_JOB(id, step) { \
   step(); \
-  if((--current_jobs[id].remaining) == 0) { \
-    current_jobs[id].running = false; \
-    *timers[id].tccrnb = 0; \
-    *timers[id].timsk = 0; \
-  } \
+  if((--current_jobs[id].remaining) == 0) \
+    STOP_JOB(id) \
 }
 
 
 #define TRIGGER_SG(id, pin) { \
-  current_jobs[id].running = false; \
-  *timers[id].tccrnb = 0; \
-  *timers[id].timsk = 0; \
+  STOP_JOB(id); \
   detachInterrupt(digitalPinToInterrupt(pin)); \
 }
 
@@ -115,6 +117,7 @@ void sg_0(void) {TRIGGER_SG(0, SG_FEED)}
 void sg_1(void) {TRIGGER_SG(1, SG_CLAMP)}
 
 ISR(TIMER2_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
+// ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
 ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
 ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
@@ -129,13 +132,13 @@ void clear_jobs() {
   cli();
   job_queue.clear();
   job_size_queue.clear();
-  for(byte i=0; i<SUBJOBS_PER_JOB; current_jobs[i++].running = false);
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++) STOP_JOB(i);
   sei();
 }
 
 inline bool idempotent(Job j) {
   return j.en==KEEP && j.dir==KEEP &&
-  (j.frequency==0 || j.end.ty!=IMMEDIATE || j.end.ty==COUNT&&j.end.cond==0) &&
+  (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) &&
   j.callback == NULL;
 }
 
@@ -275,13 +278,16 @@ void machine_loop() {
             *timers[id].timsk = 2; //enable interrupt of OCRnA
 
             byte prescaling = 1;
-            set_timer_period(id,get_timer_period(id, next.frequency, &prescaling));
+            uint16_t period = get_timer_period(id, next.frequency, &prescaling);
+            set_timer_period(id,period);
 
             *timers[id].tccrnb |= prescaling;
 
             Serial.print(next.axis);
             Serial.print(" ");
             Serial.print(next.frequency);
+            Serial.print(" ");
+            Serial.print(period);
             Serial.print(" ");
             Serial.print(get_timer_period(id));
             Serial.print(" ");
