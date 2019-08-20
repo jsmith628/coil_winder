@@ -5,6 +5,8 @@
 #include "ascii_control.h"
 
 #define DEFAULT_SPEED 1
+#define DEFAULT_MAX_FEEDRATE INFINITY
+#define DEFAULT_MAX_SPINDLE_SPEED INFINITY
 
 #define DWELL_FREQUENCY 10000
 
@@ -28,7 +30,7 @@ typedef struct {
   int32_t machine_pos; //steps
   const int32_t min_pos, max_pos; //steps
 
-  float pos; //currect units
+  float pos; //current units
   int32_t zero; //steps
 
   float steps_per_unit;
@@ -44,6 +46,8 @@ Axis axes[NUM_AXES] = {
 };
 
 bool endstops_enabled = true;
+float max_feedrate = DEFAULT_MAX_FEEDRATE;
+float max_spindle_speed = DEFAULT_MAX_SPINDLE_SPEED;
 
 inline float pos_from_steps(byte axis, int32_t new_pos) {
   if(axes[axis].coords==LOCAL) {
@@ -126,9 +130,9 @@ inline float next_feedrate(float f) {
   if(f==f) {
     f = abs(f);
     last_feedrate = f;
-    return f;
+    return min(f,max_feedrate);
   } else {
-    return last_feedrate;
+    return min(last_feedrate,max_feedrate);
   }
 }
 
@@ -137,7 +141,7 @@ inline float drive_speed(float da, float w, float s, float travel) {
     float dw = position_change(W_AXIS, w);
     return abs(dw / (da / travel));
   } else {
-    return abs(s);
+    return min(abs(s),max_spindle_speed);
   }
 }
 
@@ -170,6 +174,13 @@ void g0 (float a, float b, float w, float s, float f) {
   float travel = next_feedrate(f);
   float drive = drive_speed(position_change(A_AXIS,a),w,s,travel);
 
+  //clamp down the speeds if the drive exceeds the max and is determined by feedrate
+  if(s!=s && drive==drive && drive>max_spindle_speed) {
+      float factor = max_spindle_speed / drive;
+      drive = max_spindle_speed;
+      travel *= factor;
+  }
+
   Jobs next;
 
   next.jobs[A_AXIS] = move_to(A_AXIS, a, travel);
@@ -198,6 +209,14 @@ void g1 (float a, float b, float w, float s, float f) {
   float b_speed = abs(db / time);
   float w_speed = abs(dw / time);
   float drive = drive_speed(da,w,w_speed,a_speed);
+
+  //clamp down the speeds if the drive exceeds the max and is determined by feedrate
+  if(s!=s && drive==drive && drive>max_spindle_speed) {
+      float factor = max_spindle_speed / drive;
+      drive = max_spindle_speed;
+      a_speed *= factor;
+      b_speed *= factor;
+  }
 
   Jobs next;
 
@@ -278,7 +297,11 @@ void g31 (int8_t a, int8_t b) {
 }
 
 //Define maximum spindle Speed (Speed)
-void g50 (float s) {}
+void g50 (float s) {
+    max_spindle_speed = s==s ? s : DEFAULT_MAX_SPINDLE_SPEED;
+    Serial.print("Set maximum spindle speed to ");
+    Serial.println(max_spindle_speed);
+}
 
 //Local coordinates, defines program zero to a new location (A position 0, B position 0, W position 0)
 void g52 (float a, float b, float w) {
@@ -474,7 +497,11 @@ void m125(float a, float b, float w) {}
 void m201(float s) {}
 
 //Set max feedrate (Feedrate)
-void m203(float f) {}
+void m203(float f) {
+    max_feedrate = f==f ? f : DEFAULT_MAX_FEEDRATE;
+    Serial.print("Set maximum feedrate to ");
+    Serial.println(max_feedrate);
+}
 
 //Set starting acceleration (A axis acceleration, B axis acceleration, Spindle acceleration)
 void m204(float a, float b, float w) {}
