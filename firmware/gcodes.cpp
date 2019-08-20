@@ -186,15 +186,18 @@ void g1 (float a, float b, float w, float s, float f) {
 
   float da = position_change(A_AXIS,a);
   float db = position_change(B_AXIS,b);
+  float dw = position_change(W_AXIS,w);
 
   float travel = next_feedrate(f);
 
-  float max_move = da==da ? db==db ? max(da,db) : da : db;
+  float max_move = da==da ? db==db ? max(abs(da),abs(db)) : da : db;
   float time = max_move / travel;
+  if(s==s && dw==dw) time = max(dw, time);
 
   float a_speed = abs(da / time);
   float b_speed = abs(db / time);
-  float drive = drive_speed(da,w,s,a_speed);
+  float w_speed = abs(dw / time);
+  float drive = drive_speed(da,w,w_speed,a_speed);
 
   Jobs next;
 
