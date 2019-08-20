@@ -206,9 +206,6 @@ void machine_loop() {
 
     //enact the next job if there is one
     if(job_size_queue.count()>0){
-      Serial.print((size_t) &STEP_FEED_PORT, HEX);
-      Serial.print(" ");
-      Serial.println(STEP_FEED_BIT, BIN);
       byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens
@@ -292,19 +289,19 @@ void machine_loop() {
 
             *timers[id].tccrnb |= prescaling;
 
-            Serial.print(next.axis);
-            Serial.print(" ");
-            Serial.print(next.frequency);
-            Serial.print(" ");
-            Serial.print(period);
-            Serial.print(" ");
-            Serial.print(get_timer_period(id));
-            Serial.print(" ");
-            Serial.print(*timers[id].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.print(end.cond);
-            Serial.print(" ");
-            Serial.println(current_jobs[id].remaining);
+            // Serial.print(next.axis);
+            // Serial.print(" ");
+            // Serial.print(next.frequency);
+            // Serial.print(" ");
+            // Serial.print(period);
+            // Serial.print(" ");
+            // Serial.print(get_timer_period(id));
+            // Serial.print(" ");
+            // Serial.print(*timers[id].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.print(end.cond);
+            // Serial.print(" ");
+            // Serial.println(current_jobs[id].remaining);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0;
