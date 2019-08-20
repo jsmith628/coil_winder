@@ -95,7 +95,13 @@ struct JobProgress {
   *timers[id].timsk = 0; \
 }
 
-#define DO_STEP_FEED() (STEP_FEED_PORT ^= STEP_FEED_BIT)
+// #define DO_STEP_FEED() (STEP_FEED_PORT ^= STEP_FEED_BIT)
+#define DO_STEP_FEED() { \
+    static byte step = 0; \
+    step ^= STEP_FEED_BIT; \
+    STEP_FEED_PORT = step; \
+}
+
 #define DO_STEP_CLAMP() (STEP_CLAMP_PORT ^= STEP_CLAMP_BIT)
 #define DO_STEP_DRIVE() (STEP_DRIVE_PORT ^= STEP_DRIVE_BIT)
 #define DO_STEP_NOOP()
@@ -200,6 +206,9 @@ void machine_loop() {
 
     //enact the next job if there is one
     if(job_size_queue.count()>0){
+      Serial.print((size_t) &STEP_FEED_PORT, HEX);
+      Serial.print(" ");
+      Serial.println(STEP_FEED_BIT, BIN);
       byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens
@@ -219,9 +228,9 @@ void machine_loop() {
 
           if(next.en!=KEEP) {
             switch(id) {
-              case 0: digitalWrite(EN_FEED, next.dir==SET ^ FEED_INVERT_EN ? HIGH : LOW); break;
-              case 1: digitalWrite(EN_CLAMP, next.dir==SET ^ CLAMP_INVERT_EN ? HIGH : LOW); break;
-              case 2: digitalWrite(EN_DRIVE, next.dir==SET ^ DRIVE_INVERT_EN ? HIGH : LOW); break;
+              case 0: digitalWrite(EN_FEED, next.en==SET ^ FEED_INVERT_EN ? HIGH : LOW); break;
+              case 1: digitalWrite(EN_CLAMP, next.en==SET ^ CLAMP_INVERT_EN ? HIGH : LOW); break;
+              case 2: digitalWrite(EN_DRIVE, next.en==SET ^ DRIVE_INVERT_EN ? HIGH : LOW); break;
             }
           }
 
