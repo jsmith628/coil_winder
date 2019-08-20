@@ -4,7 +4,8 @@
 #include "machine.h"
 #include "ascii_control.h"
 
-#define DEFAULT_SPEED 1
+#define DEFAULT_FEEDRATE 1
+#define DEFAULT_SPINDLE_SPEED 1
 #define DEFAULT_MAX_FEEDRATE INFINITY
 #define DEFAULT_MAX_SPINDLE_SPEED INFINITY
 
@@ -64,7 +65,7 @@ inline float position_change(byte axis, float a) {
 Job move_to(byte axis, float x, float s) {
   Job j = NOOP_JOB;
 
-  if(x==x && s==s) {
+  if(x==x && s==s && s!=0) {
 
     float d = position_change(axis, x);
 
@@ -112,10 +113,11 @@ void set_machine_coords(byte axis) {
 }
 
 void set_local_coords(byte axis, float zero) {
-  if(axes[axis].coords == LOCAL) return;
-  if(zero==zero) axes[axis].zero = zero * axes[axis].steps_per_unit;
-  axes[axis].coords = LOCAL;
-  axes[axis].pos = pos_from_steps(axis, axes[axis].machine_pos);
+  if(zero==zero) {
+    axes[axis].zero = zero * axes[axis].steps_per_unit;
+    axes[axis].coords = LOCAL;
+    axes[axis].pos = pos_from_steps(axis, axes[axis].machine_pos);
+  }
 }
 
 void set_incremental_coords(byte axis) {
@@ -124,7 +126,7 @@ void set_incremental_coords(byte axis) {
   axes[axis].coords = INCREMENTAL;
 }
 
-float last_feedrate = 0;
+float last_feedrate = DEFAULT_FEEDRATE;
 
 inline float next_feedrate(float f) {
   if(f==f) {
@@ -137,11 +139,13 @@ inline float next_feedrate(float f) {
 }
 
 inline float drive_speed(float da, float w, float s, float travel) {
-  if(s!=s && da==da) {
+  if(s!=s && da==da && travel==travel) {
     float dw = position_change(W_AXIS, w);
     return abs(dw / (da / travel));
-  } else {
+  } else if(s==s) {
     return min(abs(s),max_spindle_speed);
+  } else {
+    return DEFAULT_SPINDLE_SPEED;
   }
 }
 
@@ -315,8 +319,9 @@ void g52 (float a, float b, float w) {
     Serial.print(axes[i].zero/axes[i].steps_per_unit);
     Serial.print(' ');
     Serial.print(axes[i].name);
-    Serial.print("=");
+    Serial.print('=');
     Serial.print(axes[i].pos);
+    if(i<NUM_AXES) Serial.print(", ");
   }
 
   Serial.println();
@@ -329,8 +334,9 @@ void g90() {
   for(byte i=0; i<W_AXIS; i++) {
     set_machine_coords(i);
     Serial.print(axes[i].name);
-    Serial.print("=");
+    Serial.print('=');
     Serial.print(axes[i].pos);
+    if(i<W_AXIS) Serial.print(", ");
   }
 
   Serial.println();
@@ -343,7 +349,23 @@ void g91() {
 }
 
 //Set current position to specified value (A position, B position, Spindle position)
-void g92(float a, float b, float w){}
+void g92(float a, float b, float w){
+  Serial.print("Position set to: ");
+
+  for(char i=0; i<3; i++) {
+      float param = i==0 ? a : i==1 ? b : w;
+      if(param==param) {
+        set_machine_coords(i);
+        set_local_coords(i, axes[i].pos-param);
+        Serial.print(axes[i].name);
+        Serial.print('=');
+        Serial.print(param);
+        if(i<3) Serial.print(", ");
+      }
+  }
+
+  Serial.println();
+}
 
 //Feedrate per minute
 void g94() {feed_mode = FEEDRATE_TIME;}
