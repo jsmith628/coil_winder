@@ -1,6 +1,8 @@
 #ifndef _GCODE_H_
   #define _GCODE_H_
 
+#include <stdint.h>
+
 //control functions
 
 //returns the min number of commands available in the queue

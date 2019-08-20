@@ -1,8 +1,6 @@
 #ifndef _PARSER_H_
   #define _PARSER_H_
 
-#include <WString.h>
-
 #define MODIFIERLENGTH 6
 #define BUFFERLENGTH 64
 #define MINIMUMSPACE 32
@@ -19,13 +17,13 @@ typedef struct {
 } command;
 
 
-void display_warning(String type);
+void display_warning(const char * type);
 
 
-void display_warning(String type, String details);
+void display_warning(const char * type, const char * details);
 
 
-void display_warning(String type, unsigned int specificType, String details);
+void display_warning(const char * type, unsigned int specificType, const char * details);
 
 
 bool read_command();

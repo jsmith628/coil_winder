@@ -14,18 +14,18 @@
 command com;
 char buffer[BUFFERLENGTH+1];
 
-void display_warning(String type){
+void display_warning(const char * type){
   Serial.print("Warning: ");
   Serial.println(type);
 }
 
-void display_warning(String type, String details){
+void display_warning(const char * type, const char * details){
   Serial.print("Warning: ");
   Serial.println(type);
   Serial.println(details);
 }
 
-void display_warning(String type, unsigned int specificType, String details){
+void display_warning(const char * type, unsigned int specificType, const char * details){
   Serial.print("Warning: ");
   Serial.print(type);
   Serial.print(specificType);
