@@ -7,8 +7,8 @@
 #define EN_CLAMP 56
 #define DIR_CLAMP 61
 #define STEP_CLAMP 60
-#define STEP_CLAMP_PORT PORTC
-#define STEP_CLAMP_BIT (1<<7)
+#define STEP_CLAMP_PORT PORTF
+#define STEP_CLAMP_BIT _BV(PORTF6)
 #define CS_CLAMP 49
 #define SG_CLAMP 19
 #define CLAMP_STEPS_PER_TURN 200
@@ -24,8 +24,8 @@
 #define EN_FEED 38
 #define DIR_FEED 55
 #define STEP_FEED 54
-#define STEP_FEED_PORT PORTC
-#define STEP_FEED_BIT (1<<1)
+#define STEP_FEED_PORT PORTF
+#define STEP_FEED_BIT _BV(PORTF0)
 #define CS_FEED 53
 #define SG_FEED 2
 #define FEED_STEPS_PER_TURN 200
@@ -40,8 +40,8 @@
 #define EN_DRIVE 62
 #define DIR_DRIVE 48
 #define STEP_DRIVE 46
-#define STEP_DRIVE_PORT PORTD
-#define STEP_DRIVE_BIT (1<<3)
+#define STEP_DRIVE_PORT PORTL
+#define STEP_DRIVE_BIT _BV(PORTL3)
 #define DRIVE_INVERT_DIR false
 #define DRIVE_INVERT_EN true
 #define DRIVE_DEDGE false
