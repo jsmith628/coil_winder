@@ -6,7 +6,7 @@
 
 #define DEFAULT_SPEED 1
 
-#define DWELL_FREQUENCY 1000
+#define DWELL_FREQUENCY 10000
 
 #define A_AXIS 0
 #define B_AXIS 1
