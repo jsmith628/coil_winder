@@ -1,5 +1,13 @@
+# Arduino and C builds
 *.bin
 *.eep
 *.hex
 *.elf
 *.out
+
+# gcode tests
+*.gcode
+
+# decompiled assembly files
+*/asm
+asm
