@@ -27,17 +27,18 @@ typedef struct {
     volatile uint8_t * tccrnb;
     volatile void * tcnt;
     volatile void * ocra;
+    volatile void * ocrb;
     volatile uint8_t * timsk;
 } Timer;
 
 //all of the 16bit timers on the ATMEGA2560
 Timer timers[4] = {
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &TIMSK3},
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &TIMSK4},
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &TIMSK5},
-  // {16, 0xFFFF0000, prescaling_16_bit, &TCCR1A, &TCCR1B, &TCNT1, &OCR1A, &TIMSK1},
-  {8, 0xFFFFFF00, prescaling_timer_2, &TCCR2A, &TCCR2B, &TCNT2, &OCR2A, &TIMSK2},
-  // {8, 0xFFFFFF00, prescaling_timer_2, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &TIMSK1},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3B, &TIMSK3},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4B, &TIMSK4},
+  {16, 0xFFFF0000, prescaling_16_bit, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5B, &TIMSK5},
+  // {16, 0xFFFF0000, prescaling_16_bit, &TCCR1A, &TCCR1B, &TCNT1, &OCR1A, &OCR3A, &TIMSK1},
+  {8, 0xFFFFFF00, prescaling_timer_2, &TCCR2A, &TCCR2B, &TCNT2, &OCR2A, &OCR2B, &TIMSK2},
+  // {8, 0xFFFFFF00, prescaling_timer_2, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &TIMSK1},
 };
 
 inline void set_timer_count(byte id, uint16_t val) {
@@ -95,15 +96,24 @@ struct JobProgress {
   *timers[id].timsk = 0; \
 }
 
-// #define DO_STEP_FEED() (STEP_FEED_PORT ^= STEP_FEED_BIT)
-#define DO_STEP_FEED() { \
-    static byte step = 0; \
-    step ^= STEP_FEED_BIT; \
-    STEP_FEED_PORT = step; \
-}
+#ifdef FEED_DEDGE
+  #define DO_STEP_FEED() (STEP_FEED_PORT ^= 1<<STEP_FEED_BIT)
+#else
+  #define DO_STEP_FEED() (STEP_FEED_PORT |= 1<<STEP_FEED_BIT)
+#endif
 
-#define DO_STEP_CLAMP() (STEP_CLAMP_PORT ^= STEP_CLAMP_BIT)
-#define DO_STEP_DRIVE() (STEP_DRIVE_PORT ^= STEP_DRIVE_BIT)
+#ifdef CLAMP_DEDGE
+  #define DO_STEP_CLAMP() (STEP_CLAMP_PORT ^= 1<<STEP_CLAMP_BIT)
+#else
+  #define DO_STEP_CLAMP() (STEP_CLAMP_PORT |= 1<<STEP_CLAMP_BIT)
+#endif
+
+#ifdef FEED_DEDGE
+  #define DO_STEP_DRIVE() (STEP_DRIVE_PORT ^= 1<<STEP_DRIVE_BIT)
+#else
+  #define DO_STEP_DRIVE() (STEP_DRIVE_PORT |= 1<<STEP_DRIVE_BIT)
+#endif
+
 #define DO_STEP_NOOP()
 
 //to be run in the ISRs
@@ -127,6 +137,21 @@ ISR(TIMER2_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
 ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
 ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
+
+#define DIRECT_REGISTER(port) (((uint8_t) port) <= 0x1F)
+
+#ifndef FEED_DEDGE
+  ISR(TIMER3_COMPB_vect, ISR_NAKED) { STEP_FEED_PORT &= ~(1<<STEP_FEED_BIT); reti(); }
+#endif
+
+#ifndef CLAMP_DEDGE
+  ISR(TIMER4_COMPB_vect, ISR_NAKED) { STEP_CLAMP_PORT &= ~(1<<STEP_CLAMP_BIT); reti(); }
+#endif
+
+#ifndef DRIVE_DEDGE
+  ISR(TIMER5_COMPB_vect) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); }
+#endif
+
 
 Queue<Job,6> job_queue = Queue<Job,6>();
 Queue<byte,6> job_size_queue = Queue<byte,6>();
@@ -280,14 +305,33 @@ void machine_loop() {
           *timers[id].tccrna = 0;
 
           if(current_jobs[id].running) {
-            *timers[id].tccrnb = (1<<3); //clear the timer when it reaches OCRnA
-            *timers[id].timsk = 2; //enable interrupt of OCRnA
+            *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
+            *timers[id].timsk = (1<<1); //enable interrupt of OCRnA
 
             byte prescaling = 1;
             uint16_t period = get_timer_period(id, next.frequency, &prescaling);
             set_timer_period(id,period);
 
             *timers[id].tccrnb |= prescaling;
+
+            bool set_ocrb;
+            switch(id) {
+              #ifndef FEED_DEDGE
+                case 0: set_ocrb = true; break;
+              #endif
+              #ifndef CLAMP_DEDGE
+                case 1: set_ocrb = true; break;
+              #endif
+              #ifndef DRIVE_DEDGE
+                case 2: set_ocrb = true; break;
+              #endif
+              default: set_ocrb = false; break;
+            }
+
+            if(set_ocrb) {
+              *((volatile uint16_t*) timers[id].ocrb) = period>>1;
+              *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
+            }
 
             // Serial.print(next.axis);
             // Serial.print(" ");
@@ -324,7 +368,11 @@ void machine_init() {
 
   clamp.begin();
   clamp.rms_current(CLAMP_CURRENT);
-  clamp.dedge(CLAMP_DEDGE);
+
+  #ifdef FEED_DEDGE
+    feed.dedge(FEED_DEDGE);
+  #endif
+
   clamp.microsteps(CLAMP_MS);
   clamp.TCOOLTHRS(400);
   clamp.sgt(CLAMP_SGT);
@@ -332,7 +380,11 @@ void machine_init() {
 
   feed.begin();
   feed.rms_current(FEED_CURRENT);
-  feed.dedge(FEED_DEDGE);
+
+  #ifdef FEED_DEDGE
+    feed.dedge(FEED_DEDGE);
+  #endif
+
   feed.microsteps(FEED_MS);
   feed.TCOOLTHRS(400);
   feed.sgt(FEED_SGT);
