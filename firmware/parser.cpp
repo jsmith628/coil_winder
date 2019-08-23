@@ -162,6 +162,15 @@ void interpret_gcode(command c){
 
 void parse(size_t s, char* buf){
 
+  //trim whitespace
+  while(s>0 && *buf<=' '){
+    buf++;
+    s--;
+  }
+
+  //if the command is empty, return
+  if(s==0) return;
+
   command c;
   for (int x = 0; x < MODIFIERLENGTH; x++){
       c.modifiers[x] = {0,NAN};
