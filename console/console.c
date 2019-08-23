@@ -114,10 +114,10 @@ void *cmd_thread(void* arg) {
       } else {
         cmd_buffer_front->size--;
       }
-    } else if(x==EOT || x=='\n' || cmd_buffer_front->size>=BUF_PAGE_SIZE-1) {//check if we've finished the line
+    } else if(x==CAN || x==EOT || x=='\n' || cmd_buffer_front->size>=BUF_PAGE_SIZE-1) {//check if we've finished the line
 
       //send control characters immediately
-      if(x==EOT) cmd_buffer_front->control = true;
+      if(x==EOT || x==CAN) cmd_buffer_front->control = true;
 
       //push the finished command onto the list
       cmd_buffer_front->next = init_page();
