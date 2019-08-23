@@ -85,7 +85,7 @@ size_t next_command(char* dest, size_t max_size) {
 }
 
 void com_loop() {
-  for(byte i=0; i<BUF_PAGE_SIZE && Serial.available() && text_buffer.available()>0; i++) {
+  for(byte i=0; i<BUF_PAGE_SIZE && Serial.available() && text_buffer.available()>1; i++) {
     //read the next char in transmission
     char x = (char) Serial.read();
 
@@ -99,6 +99,10 @@ void com_loop() {
       } else if(x==DEL) {//DEL should backspace
         backspace();
       } else if(!in_comment && x!=' ') {
+
+        //if we have a G or an M, insert a newline to signify the end of the last command
+        if((x=='G' || x=='M') && text_buffer.count()>0) newline();
+
         //read the character into the buffer
         text_buffer.push_bottom(x);
       }
