@@ -103,6 +103,7 @@ typedef struct {
 } Jobs;
 
 bool queue_jobs(Jobs j);
+void clear_job_queue();
 void clear_jobs();
 byte open_jobs();
 

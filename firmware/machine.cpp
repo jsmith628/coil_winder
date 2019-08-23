@@ -159,13 +159,18 @@ Queue<byte,6> job_size_queue = Queue<byte,6>();
 int32_t drive_freq = 0;
 bool drive_dir = false;
 
-void clear_jobs() {
-  cli();
+void clear_job_queue() {
   job_queue.clear();
   job_size_queue.clear();
+}
+
+void clear_jobs() {
+  cli();
+  clear_job_queue();
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) STOP_JOB(i);
   sei();
 }
+
 
 inline bool idempotent(Job j) {
   return j.en==KEEP && j.dir==KEEP &&

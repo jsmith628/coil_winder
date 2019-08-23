@@ -210,7 +210,7 @@ void *read_thread(void* arg) {
         notify(&flow_ready, &flow_lock, &flow_on);
       } else if(xflow && x==XOFF) { //block the writing thread if we get an XOFF
         lock_set(&flow_lock, &flow_on, false);
-      } else if((end_on_eot && x==EOT) || x==ETX) { //stop on an EOF, ^D, M20, or ^C
+      } else if((end_on_eot && x==EOT) || x==INTERRUPT || x==QUIT) { //stop on an EOF, ^D, M20, or ^C
         notify(&stop_ready, &stop_lock, &stop);
       } else { //else, just parrot to stdout
         fputc(x, stdout);
@@ -320,7 +320,8 @@ void signal_handler(int sig) {
 
   char msg[2] = "\0\n";
   switch(sig){
-    case SIGINT: msg[0] = ETX; break;
+    case SIGQUIT: msg[0] = QUIT; break;
+    case SIGINT: msg[0] = INTERRUPT; break;
     default: notify(&stop_ready, &stop_lock, &stop);
   }
 
@@ -386,6 +387,7 @@ int main(int argc, char const *argv[]) {
 
   //register a function to handle system signals
   signal(SIGINT, signal_handler);
+  signal(SIGQUIT, signal_handler);
 
   //started
   pthread_t t1,t2;

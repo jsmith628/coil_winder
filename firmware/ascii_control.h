@@ -16,9 +16,15 @@
 #define NAK ((char) 0x15)
 #define CAN ((char) 0x18)
 #define SUB ((char) 0x1A)
+#define FS ((char) 0x1C)
 #define DEL ((char) 0x7F)
 
 #define XON DC1
-#define XOFF DC2
+#define PAUSE DC2
+#define XOFF DC3
+#define RESUME DC4
+
+#define INTERRUPT ETX
+#define QUIT FS
 
 #endif

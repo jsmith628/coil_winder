@@ -149,17 +149,18 @@ inline float drive_speed(float da, float w, float s, float travel) {
   }
 }
 
+void queue_callback(void (*callback)(const void*), const void * callback_args) {
+  Job j = NOOP_JOB;
+  j.callback = callback;
+  j.callback_args = callback_args;
 
-//control functions
-
-//returns the min number of commands available in the queue
-byte space_in_queue() { return open_jobs(); }
-
-//cancels the last command put into the queue (assuming it hasn't started yet)
-void cancel_last_command() {
-  Serial.println("Canceling last command");
-  // cancel_last_job();
+  queue_jobs({{NOOP_JOB, NOOP_JOB, NOOP_JOB, j}});
 }
+
+bool interrupt_queued = false;
+
+void print_eot(const void* arg) { Serial.print(EOT); }
+void print_interrupt(const void* arg) { interrupt_queued=false; Serial.print(INTERRUPT); }
 
 void println_callback(const void* msg) {
   Serial.println((char*) msg);
@@ -168,6 +169,35 @@ void println_callback(const void* msg) {
 void print_callback(const void* msg) {
   Serial.print((char*) msg);
 }
+
+//control functions
+
+//returns the min number of commands available in the queue
+byte space_in_queue() { return open_jobs(); }
+
+//cancels the last command put into the queue (assuming it hasn't started yet)
+void cancel() {
+  Serial.println("Canceling last command");
+  // cancel_last_job();
+}
+
+//clears queue and sends INTERRUPT code once current command is complete
+void interrupt() {
+  if(!interrupt_queued) {
+    interrupt_queued = true;
+    clear_job_queue();
+    queue_callback(print_interrupt, NULL);
+  } else {
+    m112();
+    Serial.print(INTERRUPT);
+  }
+}
+
+//pauses machine excecution
+void pause() {}
+
+//resumes machine excecution from pause
+void resume() {}
 
 
 //G codes define movement and interpretation commands
@@ -430,17 +460,8 @@ void m18() {
   queue_jobs(next);
 }
 
-void print_eot(const void* arg) { Serial.print(EOT); }
-
 //End of program, return to program top
-void m30() {
-
-  Job j = NOOP_JOB;
-  j.callback = print_eot;
-  j.callback_args = NULL;
-
-  queue_jobs({{NOOP_JOB, NOOP_JOB, NOOP_JOB, j}});
-}
+void m30() {queue_callback(print_eot, NULL);}
 
 //Spindle absolute positioning
 void m82(){set_machine_coords(W_AXIS);}

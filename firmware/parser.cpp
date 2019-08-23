@@ -229,13 +229,12 @@ void parse(size_t s, char* buf){
 
   } else {
 
-    if(*buf == EOT) { m30();}
-    else if(*buf == ENQ){Serial.print(space_in_queue() >= MINIMUMSPACE ? ACK : NAK);}
-    else if(*buf == CAN){cancel_last_command();}
-    else if(*buf == ETX){
-      m112();
-      Serial.print(ETX);
-    } else {
+    if(*buf == QUIT) {m112(); Serial.print(QUIT);}
+    else if(*buf == INTERRUPT) {interrupt();}
+    else if(*buf == EOT) { m30();}
+    else if(*buf == CAN) {cancel();}
+    else if(*buf == ENQ) {Serial.print(space_in_queue() >= MINIMUMSPACE ? ACK : NAK);}
+    else {
       c.type = 0;
       c.number = 0;
       interpret_gcode(c);

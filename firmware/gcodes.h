@@ -9,7 +9,16 @@
 uint8_t space_in_queue();
 
 //cancels the last command put into the queue (assuming it hasn't started yet)
-void cancel_last_command();
+void cancel();
+
+//clears queue and sends INTERRUPT code once current command is complete
+void interrupt();
+
+//pauses machine excecution
+void pause();
+
+//resumes machine excecution from pause
+void resume();
 
 //G codes define movement and interpretation commands
 
