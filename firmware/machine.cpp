@@ -214,13 +214,6 @@ bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || job_done
 
 void machine_loop() {
 
-  for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
-    if(!current_jobs[i].running && current_jobs[i].callback!=NULL) {
-      (*current_jobs[i].callback)(current_jobs[i].callback_args);
-      current_jobs[i].callback = NULL;
-    }
-  }
-
   // static int last_time = millis();
   //
   // int time = millis();
@@ -365,6 +358,15 @@ void machine_loop() {
       drive_freq = 0;
     }
   }
+
+  //run the callbacks for any jobs that have completed
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+    if(!current_jobs[i].running && current_jobs[i].callback!=NULL) {
+      (*current_jobs[i].callback)(current_jobs[i].callback_args);
+      current_jobs[i].callback = NULL;
+    }
+  }
+
 }
 
 void machine_init() {
