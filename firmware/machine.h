@@ -105,6 +105,9 @@ typedef struct {
   Job jobs[SUBJOBS_PER_JOB];
 } Jobs;
 
+void pause_jobs();
+void resume_jobs();
+
 bool queue_jobs(Jobs j);
 void clear_job_queue();
 void clear_jobs();

@@ -76,6 +76,7 @@ struct buf_list* init_page() {
 
 bool xflow = true; //setting for if XON/XOFF works
 bool echo = false; //setting for if things are spat back at stdout
+bool allow_stop = false;
 
 //the setting for if an EOT from the device closes the application
 //however, this needs to be able to change since ^D overrides this behavior
@@ -209,6 +210,8 @@ void *read_thread(void* arg) {
         lock_set(&flow_lock, &flow_on, false);
       } else if((end_on_eot && x==EOT) || x==INTERRUPT || x==QUIT) { //stop on an EOF, ^D, M20, or ^C
         notify(&stop_ready, &stop_lock, &stop);
+      } else if(x==PAUSE && allow_stop) {
+        raise(SIGSTOP);
       } else { //else, just parrot to stdout
         fputc(x, stdout);
       }
@@ -312,7 +315,9 @@ int init_device(int device, bool conv_lc) {
 int print_help_info(FILE * stream) {
   fprintf(stream,
     "\n"
-    "Usage: console DEVICE [-e|--echo|-E|--noecho] [-x|--xflow|-X|--noxflow] [-d|--eot|-D|--noeot] [-u|--upper|-U|--noupper]\n"
+    "Usage: console DEVICE [-e|--echo|-E|--noecho] [-x|--xflow|-X|--noxflow]"
+                          "[-d|--eot|-D|--noeot] [-u|--upper|-U|--noupper]"
+                          "[-s|--stop|-S|--nostop]\n"
     "   or: console --help\n"
     "\n"
     "Options:\n"
@@ -327,13 +332,17 @@ int print_help_info(FILE * stream) {
     "    -X, --noxflow:\n"
     "        turns off --xflow\n"
     "    -d, --eot:\n"
-    "        when on, the console will close when an ASCII value 0x04 (EOT) is read from the device \n"
+    "        when on, the console will close when an ASCII value 0x04 (EOT) is read from the device (off by default) \n"
     "    -D, --noeot:\n"
     "        turns off --eot\n"
     "    -u, --upper:\n"
-    "        when on, lower-case input will automatically be converted to uppercase \n"
+    "        when on, lower-case input will automatically be converted to uppercase (off by default) \n"
     "    -U, --noupper:\n"
     "        turns off --upper\n"
+    "    -s, --stop:\n"
+    "        when a TSTP signal is received, the console will pause the device and suspend\n"
+    "    -S, --nostop:\n"
+    "        when a TSTP signal is received, the console will toggle the pause-state of the device\n"
     "    --help:\n"
     "        displays this message\n"
     "\n"
@@ -344,10 +353,20 @@ int print_help_info(FILE * stream) {
 //captures the SIGINT signal and passes it onto the device
 void signal_handler(int sig) {
 
+  static bool paused = false;
+
   char msg = '\0';
   switch(sig){
     case SIGQUIT: msg = QUIT; break;
     case SIGINT: msg = INTERRUPT; break;
+    case SIGTSTP:
+      msg = !paused||allow_stop ? PAUSE : RESUME;
+      paused = msg==PAUSE;
+      break;
+    case SIGCONT:
+      msg = RESUME;
+      paused = false;
+      break;
     default: notify(&stop_ready, &stop_lock, &stop);
   }
 
@@ -368,6 +387,8 @@ int main(int argc, char const *argv[]) {
     else if(!strcmp(argv[i],"--noeot")) end_on_eot=false;
     else if(!strcmp(argv[i],"--upper")) conv_lc=true;
     else if(!strcmp(argv[i],"--noupper")) conv_lc=false;
+    else if(!strcmp(argv[i],"--stop")) allow_stop=true;
+    else if(!strcmp(argv[i],"--nostop")) allow_stop=false;
     else if(!strcmp(argv[i],"--help")) return print_help_info(stdout);
     else if(argv[i][0] == '-' && argv[i][1] != '-' && argv[i][1] != '\0') {
       for(char const * x = &argv[i][1]; *x!='\0'; x++) {
@@ -379,6 +400,8 @@ int main(int argc, char const *argv[]) {
         else if(*x=='D') end_on_eot=false;
         else if(*x=='u') conv_lc=true;
         else if(*x=='U') conv_lc=false;
+        else if(*x=='s') allow_stop=true;
+        else if(*x=='S') allow_stop=false;
         else {
           fprintf(stderr, "Invalid option %s\n", argv[i]);
           fprintf(stderr, "Use --help for more information\n");
@@ -414,6 +437,8 @@ int main(int argc, char const *argv[]) {
   //register a function to handle system signals
   signal(SIGINT, signal_handler);
   signal(SIGQUIT, signal_handler);
+  signal(SIGTSTP, signal_handler);
+  signal(SIGCONT, signal_handler);
 
   //started
   pthread_t t1,t2;

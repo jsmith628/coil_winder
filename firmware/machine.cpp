@@ -152,6 +152,27 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
   ISR(TIMER5_COMPB_vect) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); }
 #endif
 
+bool paused = false;
+uint8_t paused_timsks[4] = {0,0,0,0};
+
+void pause_jobs(){
+  cli();
+  paused = true;
+  for(byte i=0; i<4; i++) {
+    paused_timsks[i] = *timers[i].timsk;
+    *timers[i].timsk = 0;
+  }
+  sei();
+}
+
+void resume_jobs(){
+  cli();
+  for(byte i=0; i<4; i++) { *timers[i].timsk = paused_timsks[i]; }
+  paused = false;
+  sei();
+}
+
+
 
 Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
 Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
@@ -228,7 +249,7 @@ void machine_loop() {
   if(job_done()) {
 
     //enact the next job if there is one
-    if(job_size_queue.count()>0){
+    if(!paused && job_size_queue.count()>0){
       byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens

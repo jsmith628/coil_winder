@@ -210,10 +210,17 @@ void acknowledge() {}
 void bell() {}
 
 //pauses machine excecution
-void pause() {}
+void pause() {
+  pause_jobs();
+  Serial.println("Pausing!");
+  Serial.print(PAUSE);
+}
 
 //resumes machine excecution from pause
-void resume() {}
+void resume() {
+  Serial.println("Resuming!");
+  resume_jobs();
+}
 
 //run when receiving an NAK
 void neg_acknowledge() {}
