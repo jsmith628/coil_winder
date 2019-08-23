@@ -2,23 +2,10 @@
   #define _GCODE_H_
 
 #include <stdint.h>
-
-//control functions
+#include <stdbool.h>
 
 //returns the min number of commands available in the queue
 uint8_t space_in_queue();
-
-//cancels the last command put into the queue (assuming it hasn't started yet)
-void cancel();
-
-//clears queue and sends INTERRUPT code once current command is complete
-void interrupt();
-
-//pauses machine excecution
-void pause();
-
-//resumes machine excecution from pause
-void resume();
 
 //G codes define movement and interpretation commands
 

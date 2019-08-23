@@ -153,8 +153,8 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
 #endif
 
 
-Queue<Job,6> job_queue = Queue<Job,6>();
-Queue<byte,6> job_size_queue = Queue<byte,6>();
+Queue<Job,QUEUE_ORDER> job_queue = Queue<Job,QUEUE_ORDER>();
+Queue<byte,QUEUE_ORDER> job_size_queue = Queue<byte,QUEUE_ORDER>();
 
 int32_t drive_freq = 0;
 bool drive_dir = false;
@@ -338,19 +338,19 @@ void machine_loop() {
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
-            // Serial.print(next.axis);
-            // Serial.print(" ");
-            // Serial.print(next.frequency);
-            // Serial.print(" ");
-            // Serial.print(period);
-            // Serial.print(" ");
-            // Serial.print(get_timer_period(id));
-            // Serial.print(" ");
-            // Serial.print(*timers[id].tccrnb,BIN);
-            // Serial.print(" ");
-            // Serial.print(end.cond);
-            // Serial.print(" ");
-            // Serial.println(current_jobs[id].remaining);
+            Serial.print(next.axis);
+            Serial.print(" ");
+            Serial.print(next.frequency);
+            Serial.print(" ");
+            Serial.print(period);
+            Serial.print(" ");
+            Serial.print(get_timer_period(id));
+            Serial.print(" ");
+            Serial.print(*timers[id].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.print(end.cond);
+            Serial.print(" ");
+            Serial.println(current_jobs[id].remaining);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0;

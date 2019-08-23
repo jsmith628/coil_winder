@@ -114,13 +114,10 @@ void *cmd_thread(void* arg) {
       } else {
         cmd_buffer_front->size--;
       }
-    } else if(x<0x20&&x>=0 || cmd_buffer_front->size>=BUF_PAGE_SIZE-1) {//check if we've finished the line
+    } else if(x==EOT || x=='\n' || cmd_buffer_front->size>=BUF_PAGE_SIZE-1) {//check if we've finished the line
 
       //send control characters immediately
-      if(x==EOT && x!='\n'){
-        cmd_buffer_front->buf[cmd_buffer_front->size++] = '\n';
-        cmd_buffer_front->control = true;
-      }
+      if(x==EOT) cmd_buffer_front->control = true;
 
       //push the finished command onto the list
       cmd_buffer_front->next = init_page();
@@ -318,14 +315,14 @@ int print_help_info(FILE * stream) {
 //captures the SIGINT signal and passes it onto the device
 void signal_handler(int sig) {
 
-  char msg[2] = "\0\n";
+  char msg = '\0';
   switch(sig){
-    case SIGQUIT: msg[0] = QUIT; break;
-    case SIGINT: msg[0] = INTERRUPT; break;
+    case SIGQUIT: msg = QUIT; break;
+    case SIGINT: msg = INTERRUPT; break;
     default: notify(&stop_ready, &stop_lock, &stop);
   }
 
-  write(device, &msg, 2);
+  write(device, &msg, 1);
 }
 
 int main(int argc, char const *argv[]) {

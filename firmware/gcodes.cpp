@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 #include "gcodes.h"
+#include "control.h"
 #include "machine.h"
 #include "ascii_control.h"
 
@@ -193,11 +194,29 @@ void interrupt() {
   }
 }
 
+//queues an M30
+void end_of_transmission() {m30();}
+
+//runs an emergency stop and echos the QUIT code
+void quit() { m112(); Serial.print(QUIT); }
+
+//sends an ACK or NAK depending on whether the queue can accept stuffs
+void enquiry() {Serial.print(space_in_queue() >= QUEUE_MIN_SPACE ? ACK : NAK);}
+
+//run when receiving an ACK
+void acknowledge() {}
+
+//makes a noise
+void bell() {}
+
 //pauses machine excecution
 void pause() {}
 
 //resumes machine excecution from pause
 void resume() {}
+
+//run when receiving an NAK
+void neg_acknowledge() {}
 
 
 //G codes define movement and interpretation commands

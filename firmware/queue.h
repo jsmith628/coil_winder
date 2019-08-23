@@ -18,6 +18,7 @@ class Queue {
 
     inline unsigned int capacity();
     unsigned int count();
+    unsigned int available();
 
     bool push_top(T val);
     bool push_bottom(T val);
@@ -44,15 +45,8 @@ void Queue<T,P>::clear() {
 template<class T, byte P> inline unsigned int Queue<T,P>::capacity() { return (1 << P); }
 template<class T, byte P> inline unsigned int Queue<T,P>::mask() { return (1 << P) - 1; }
 
-template<class T, byte P>
-unsigned int Queue<T,P>::count() {
-  // if(top >= bottom) {
-  //   return top - bottom;
-  // } else {
-  //   return capacity() - (bottom - top);
-  // }
-  return size;
-}
+template<class T, byte P> unsigned int Queue<T,P>::count() { return size; }
+template<class T, byte P> unsigned int Queue<T,P>::available() { return capacity()-count(); }
 
 template<class T, byte P>
 bool Queue<T,P>::push_top(T val) {
