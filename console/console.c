@@ -268,7 +268,14 @@ int init_device(int device, bool conv_lc) {
     return 1;
   }
 
+  char x;
+
   //delay until we get a message or time-out to make sure we've properly connected
+  for(int i=0, x=0; i<5000 && !read(device, &x, 1); i++) usleep(1000);
+
+  //now, send an enquiry to make sure the device is properly setup
+  x = ENQ;
+  write(device, &x, 1);
   for(int i=0, x=0; i<5000 && !read(device, &x, 1); i++) usleep(1000);
 
   //turn on blocking-based reads
