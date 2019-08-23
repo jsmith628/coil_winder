@@ -245,7 +245,29 @@ int init_device(int device, bool conv_lc) {
 
   //115200 baud, 1 stop-bit, no-parity
   config.c_cflag &= ~(CSTOPB | PARENB | CSIZE | CBAUD);
-  config.c_cflag |= CRTSCTS | CS8 | B115200;
+  config.c_cflag |= CRTSCTS | CS8;
+
+  switch(COM_BAUD) {
+    case 0:      config.c_cflag |= B0;     break;
+    case 50:     config.c_cflag |= B50;    break;
+    case 75:     config.c_cflag |= B75;    break;
+    case 110:    config.c_cflag |= B110;   break;
+    case 134:    config.c_cflag |= B134;   break;
+    case 150:    config.c_cflag |= B150;   break;
+    case 200:    config.c_cflag |= B200;   break;
+    case 300:    config.c_cflag |= B300;   break;
+    case 600:    config.c_cflag |= B600;   break;
+    case 1200:   config.c_cflag |= B1200;  break;
+    case 1800:   config.c_cflag |= B1800;  break;
+    case 2400:   config.c_cflag |= B2400;  break;
+    case 4800:   config.c_cflag |= B4800;  break;
+    case 9600:   config.c_cflag |= B9600;  break;
+    case 19200:  config.c_cflag |= B19200;  break;
+    case 38400:  config.c_cflag |= B38400;  break;
+    case 57600:  config.c_cflag |= B57600;  break;
+    case 115200: config.c_cflag |= B115200; break;
+    case 230400: config.c_cflag |= B230400; break;
+  }
 
   //don't echo anything since the output _from_ the device is considered the "input"
   //so echoing would cause all of the loging information to be fed right back to

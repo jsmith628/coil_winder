@@ -3,6 +3,7 @@
 #define _ASCII_CONTROL_H_
 
 #define BUF_PAGE_SIZE 64
+#define COM_BAUD 115200
 
 #define ETX ((char) 0x03)
 #define EOT ((char) 0x04)

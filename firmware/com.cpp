@@ -85,7 +85,7 @@ size_t next_command(char* dest, size_t max_size) {
 }
 
 void com_loop() {
-  for(byte i=0; i<64 && Serial.available() && text_buffer.available()>0; i++) {
+  for(byte i=0; i<BUF_PAGE_SIZE && Serial.available() && text_buffer.available()>0; i++) {
     //read the next char in transmission
     char x = (char) Serial.read();
 
