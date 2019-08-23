@@ -315,8 +315,8 @@ int init_device(int device, bool conv_lc) {
 int print_help_info(FILE * stream) {
   fprintf(stream,
     "\n"
-    "Usage: console DEVICE [-e|--echo|-E|--noecho] [-x|--xflow|-X|--noxflow]"
-                          "[-d|--eot|-D|--noeot] [-u|--upper|-U|--noupper]"
+    "Usage: console DEVICE [-e|--echo|-E|--noecho] [-x|--xflow|-X|--noxflow] "
+                          "[-d|--eot|-D|--noeot] [-u|--upper|-U|--noupper] "
                           "[-s|--stop|-S|--nostop]\n"
     "   or: console --help\n"
     "\n"
