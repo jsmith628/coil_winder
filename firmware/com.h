@@ -4,7 +4,7 @@
 
 #include <Arduino.h>
 
-#define COM_BUFFER_ORDER 10
+#define COM_BUFFER_ORDER 8
 #define COM_BUFFER_SIZE (1<<COM_BUFFER_ORDER)
 #define COM_BAUD 115200
 

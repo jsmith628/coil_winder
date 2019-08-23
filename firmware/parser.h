@@ -3,7 +3,6 @@
 
 #define MODIFIERLENGTH 6
 #define BUFFERLENGTH 64
-#define MINIMUMSPACE 32
 
 typedef struct {
   char c;

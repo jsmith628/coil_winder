@@ -153,8 +153,8 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
 #endif
 
 
-Queue<Job,QUEUE_ORDER> job_queue = Queue<Job,QUEUE_ORDER>();
-Queue<byte,QUEUE_ORDER> job_size_queue = Queue<byte,QUEUE_ORDER>();
+Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
+Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
 
 int32_t drive_freq = 0;
 bool drive_dir = false;

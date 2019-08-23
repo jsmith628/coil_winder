@@ -76,6 +76,8 @@ size_t next_command(char* dest, size_t max_size) {
     }
 
     dest[len++] = '\0'; //make sure the string is NUL-terminated
+    // Serial.print(buffered_commands);
+    // Serial.print(" ");
     // Serial.println(text_buffer.available());
   }
 
@@ -83,7 +85,7 @@ size_t next_command(char* dest, size_t max_size) {
 }
 
 void com_loop() {
-  if(Serial.available() && text_buffer.available()>0) {
+  for(byte i=0; i<64 && Serial.available() && text_buffer.available()>0; i++) {
     //read the next char in transmission
     char x = (char) Serial.read();
 
