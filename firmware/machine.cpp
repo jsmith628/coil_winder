@@ -156,6 +156,7 @@ bool paused = false;
 uint8_t paused_timsks[4] = {0,0,0,0};
 
 void pause_jobs(){
+  //TODO: manage the stallguard interrupt
   cli();
   paused = true;
   for(byte i=0; i<4; i++) {
@@ -166,6 +167,7 @@ void pause_jobs(){
 }
 
 void resume_jobs(){
+  //TODO: manage the stallguard interrupt
   cli();
   for(byte i=0; i<4; i++) { *timers[i].timsk = paused_timsks[i]; }
   paused = false;
