@@ -197,8 +197,8 @@ bool queue_jobs(Jobs j) {
   // }
 // }
 
-byte open_jobs() {
-  return (byte) min(min(job_queue.capacity() - job_queue.count(), job_size_queue.capacity() - job_size_queue.count()), 255);
+bool job_queue_open() {
+  return job_queue.available()>=4 && job_size_queue.available()>0;
 }
 
 bool job_done() {
@@ -338,19 +338,19 @@ void machine_loop() {
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
-            Serial.print(next.axis);
-            Serial.print(" ");
-            Serial.print(next.frequency);
-            Serial.print(" ");
-            Serial.print(period);
-            Serial.print(" ");
-            Serial.print(get_timer_period(id));
-            Serial.print(" ");
-            Serial.print(*timers[id].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.print(end.cond);
-            Serial.print(" ");
-            Serial.println(current_jobs[id].remaining);
+            // Serial.print(next.axis);
+            // Serial.print(" ");
+            // Serial.print(next.frequency);
+            // Serial.print(" ");
+            // Serial.print(period);
+            // Serial.print(" ");
+            // Serial.print(get_timer_period(id));
+            // Serial.print(" ");
+            // Serial.print(*timers[id].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.print(end.cond);
+            // Serial.print(" ");
+            // Serial.println(current_jobs[id].remaining);
           } else {
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0;

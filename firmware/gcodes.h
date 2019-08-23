@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//returns the min number of commands available in the queue
-uint8_t space_in_queue();
+//determines if the machine can take more jobs
+bool queue_open();
 
 //G codes define movement and interpretation commands
 

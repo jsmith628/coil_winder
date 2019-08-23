@@ -66,7 +66,7 @@
 #define CLAMP_STEP_RANGE (int32_t) (CLAMP_RANGE * CLAMP_STEPS_PER_MM)
 
 #define QUEUE_ORDER 6
-#define QUEUE_MIN_SPACE 32 
+#define QUEUE_MIN_SPACE 32
 #define SUBJOBS_PER_JOB 4
 #define NOOP_JOB {0, KEEP, KEEP, 0, {IMMEDIATE, 0}, NULL}
 
@@ -107,7 +107,7 @@ typedef struct {
 bool queue_jobs(Jobs j);
 void clear_job_queue();
 void clear_jobs();
-byte open_jobs();
+bool job_queue_open();
 
 bool busy();
 

@@ -36,6 +36,23 @@ void(* const PROGMEM control_callbacks[0x20])(void) = {
   quit,                NULL,            NULL,        NULL,      //0x1C-0x1F
 };
 
+bool xon = true;
+
+void enable_input() {
+  if(!xon && buffered_commands==0) {
+    xon = true;
+    Serial.write(XON);
+    // Serial.println("Queue Open!");
+  }
+}
+
+void disable_input() {
+  if(xon) {
+    xon = false;
+    Serial.write(XOFF);
+    // Serial.println("Queue Full!");
+  }
+}
 
 bool command_available(size_t max_size) {return buffered_commands>0 || text_buffer.count()>=max_size;}
 
@@ -59,6 +76,7 @@ size_t next_command(char* dest, size_t max_size) {
     }
 
     dest[len++] = '\0'; //make sure the string is NUL-terminated
+    // Serial.println(text_buffer.available());
   }
 
   return len;

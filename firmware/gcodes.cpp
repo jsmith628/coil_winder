@@ -174,7 +174,7 @@ void print_callback(const void* msg) {
 //control functions
 
 //returns the min number of commands available in the queue
-byte space_in_queue() { return open_jobs(); }
+bool queue_open() { return job_queue_open(); }
 
 //cancels the last command put into the queue (assuming it hasn't started yet)
 void cancel() {
@@ -201,7 +201,7 @@ void end_of_transmission() {m30();}
 void quit() { m112(); Serial.print(QUIT); }
 
 //sends an ACK or NAK depending on whether the queue can accept stuffs
-void enquiry() {Serial.print(space_in_queue() >= QUEUE_MIN_SPACE ? ACK : NAK);}
+void enquiry() {Serial.print(queue_open() ? ACK : NAK);}
 
 //run when receiving an ACK
 void acknowledge() {}

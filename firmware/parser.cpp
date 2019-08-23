@@ -238,27 +238,16 @@ void parse(size_t s, char* buf){
 
 bool read_command(){
 
-  static bool xon = true;
-
-  if(!xon && space_in_queue() >= MINIMUMSPACE){
-    Serial.print(XON);
-    // Serial.println("Queue open!");
-    xon = true;
-  }
+  if(queue_open()) enable_input();
 
   if(command_available(BUFFERLENGTH)){
-    if(space_in_queue() > 0) {
+    if(queue_open()) {
       size_t len = next_command(buffer, BUFFERLENGTH);
       parse(len, buffer);
-      // Serial.println(space_in_queue());
     }
   }
 
-  if(xon && space_in_queue() < MINIMUMSPACE){
-    // Serial.println("Queue full!");
-    Serial.print(XOFF);
-    xon = false;
-  }
+  if(!queue_open()) disable_input();
 }
 
 void parser_setup(){}
