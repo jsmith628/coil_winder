@@ -1,17 +1,11 @@
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <time.h>
 
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
-
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 
 #include <pthread.h>
@@ -22,11 +16,6 @@
 pthread_mutex_t flow_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t flow_ready = PTHREAD_COND_INITIALIZER;
 bool flow_on = true;
-
-//notifies the threads that there is a new command to send
-pthread_mutex_t cmd_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cmd_ready = PTHREAD_COND_INITIALIZER;
-bool cmd_on = false;
 
 //
 //Helper methods for thread-stuff
@@ -51,29 +40,6 @@ void notify(pthread_cond_t* cond, pthread_mutex_t* lock, bool* value) {
   pthread_mutex_unlock(lock);
 }
 
-
-//the mutex synchronizing buffer access
-pthread_mutex_t buf_lock = PTHREAD_MUTEX_INITIALIZER;
-
-//the buffer of commands
-struct buf_list {
-  char buf[BUF_PAGE_SIZE];
-  size_t size;
-  bool control;
-  struct buf_list* next;
-};
-struct buf_list* cmd_buffer_back;
-struct buf_list* cmd_buffer_front;
-
-//mallocs up a new buffer for the next command line
-struct buf_list* init_page() {
-  struct buf_list* page = malloc(sizeof(struct buf_list));
-  page->next = NULL;
-  page->size = 0;
-  page->control = false;
-  return page;
-}
-
 bool xflow = true; //setting for if XON/XOFF works
 bool echo = false; //setting for if things are spat back at stdout
 bool allow_stop = false;
@@ -91,101 +57,22 @@ pthread_mutex_t stop_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t stop_ready = PTHREAD_COND_INITIALIZER;
 bool stop = false;
 
-void *cmd_thread(void* arg) {
-
-  //read from stdin until we get a new-line. Then, flush the buffer
-  while(1) {
-
-    //read the next character
-    char x;
-    size_t count = fread(&x, 1, 1, stdin);
-
-    //if stdin was closed, set x to EOT
-    if(count==0) x = EOT;
-
-    pthread_mutex_lock(&buf_lock);
-
-    //add the next character to the buffer
-    cmd_buffer_front->buf[cmd_buffer_front->size++] = x;
-
-    if(x==DEL || x==BS){//do the backspace!
-      cmd_buffer_front->size--;
-      if(cmd_buffer_front->size==0) {
-        printf("\a");
-      } else {
-        cmd_buffer_front->size--;
-      }
-    } else if(x==CAN || x==EOT || x=='\n' || cmd_buffer_front->size>=BUF_PAGE_SIZE-1) {//check if we've finished the line
-
-      //send control characters immediately
-      if(x==EOT || x==CAN) cmd_buffer_front->control = true;
-
-      //push the finished command onto the list
-      cmd_buffer_front->next = init_page();
-      cmd_buffer_front = cmd_buffer_front->next;
-
-      //notify the write thread that there's more stuff
-      notify(&cmd_ready, &cmd_lock, &cmd_on);
-    }
-
-    pthread_mutex_unlock(&buf_lock);
-
-    //if stdin is closed, then we don't want to keep reading it
-    if(x==EOT) break;
-
-  }
-
-
-}
-
 void *write_thread(void* arg) {
   //get the file descriptor
   int dev = *(int*) arg;
 
-  //setup the buffer
-  pthread_mutex_lock(&buf_lock);
-  cmd_buffer_back = init_page();
-  cmd_buffer_front = cmd_buffer_back;
-  pthread_mutex_unlock(&buf_lock);
+  //loop until stdin closes
+  for(char x=0; x!=EOT;) {
 
-  //create the thread that reads stdin and constructs the buffer
-  pthread_t t;
-  pthread_create(&t, NULL, cmd_thread, NULL);
-
-  while(1) {
+    //read from stdin
+    if(fread(&x, 1, 1, stdin)==0) x = EOT;
 
     //wait until XON is sent
     wait_until(&flow_ready, &flow_lock, &flow_on);
 
-    pthread_mutex_lock(&buf_lock);
-
-    //check if there's data to send
-    //we check next since there last element in the list is the read-buffer
-    if(cmd_buffer_back->next==NULL){
-      pthread_mutex_unlock(&buf_lock);
-
-      //wait for there to be data to write
-      lock_set(&cmd_lock, &cmd_on, false);
-      wait_until(&cmd_ready, &cmd_lock, &cmd_on);
-    } else {
-
-      //if we're sending an EOT, we need to be able to exit when we get a response
-      if(cmd_buffer_back->control) lock_set(&eot_lock, &end_on_eot, true);
-
-      //write the line to the device
-      write(dev, cmd_buffer_back->buf, cmd_buffer_back->size);
-      if(echo && !cmd_buffer_back->control) fwrite(cmd_buffer_back->buf, 1, cmd_buffer_back->size, stdout);
-
-
-      //pop the line off of the buffer
-      struct buf_list* next = cmd_buffer_back->next;
-      free(cmd_buffer_back);
-      cmd_buffer_back = next;
-
-      pthread_mutex_unlock(&buf_lock);
-
-    }
-
+    //write to device
+    write(dev, &x, 1);
+    if(echo && x!=EOT) fwrite(&x, 1, 1, stdout);
 
   }
 
