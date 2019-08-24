@@ -2,8 +2,13 @@
 #ifndef _ASCII_CONTROL_H_
 #define _ASCII_CONTROL_H_
 
+enum parity { NONE=0, ODD=1, EVEN=2};
+
 #define BUF_PAGE_SIZE 64
 #define COM_BAUD 115200
+#define COM_DATA_BITS 8
+#define COM_PARITY NONE
+#define COM_TWO_STOPB false
 
 #define ETX ((char) 0x03)
 #define EOT ((char) 0x04)

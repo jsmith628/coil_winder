@@ -6,7 +6,37 @@
 #include "queue.h"
 
 void com_init() {
-  Serial.begin(COM_BAUD);
+
+  int mode;
+  switch(COM_PARITY&3) {
+    case 0:
+      switch(COM_DATA_BITS) {
+        case 5: mode = COM_TWO_STOPB?SERIAL_5N2:SERIAL_5N1; break;
+        case 6: mode = COM_TWO_STOPB?SERIAL_6N2:SERIAL_6N1; break;
+        case 7: mode = COM_TWO_STOPB?SERIAL_7N2:SERIAL_7N1; break;
+        case 8:
+        default: mode = COM_TWO_STOPB?SERIAL_8N2:SERIAL_8N1; break;
+      }
+      break;
+    case 1:
+      switch(COM_DATA_BITS) {
+        case 5: mode = COM_TWO_STOPB?SERIAL_5O2:SERIAL_5O1; break;
+        case 6: mode = COM_TWO_STOPB?SERIAL_6O2:SERIAL_6O1; break;
+        case 7: mode = COM_TWO_STOPB?SERIAL_7O2:SERIAL_7O1; break;
+        case 8:
+        default: mode = COM_TWO_STOPB?SERIAL_8O2:SERIAL_8O1; break;
+      }
+    case 2:
+      switch(COM_DATA_BITS) {
+        case 5: mode = COM_TWO_STOPB?SERIAL_5E2:SERIAL_5E1; break;
+        case 6: mode = COM_TWO_STOPB?SERIAL_6E2:SERIAL_6E1; break;
+        case 7: mode = COM_TWO_STOPB?SERIAL_7E2:SERIAL_7E1; break;
+        case 8:
+        default: mode = COM_TWO_STOPB?SERIAL_8E2:SERIAL_8E1; break;
+      }
+  }
+
+  Serial.begin(COM_BAUD, mode);
   Serial.setTimeout(0);
   while(!Serial) {}
 

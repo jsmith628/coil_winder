@@ -246,9 +246,23 @@ int init_device(int device, bool conv_lc) {
   //convert lower-case console input if desired
   if(conv_lc) config.c_oflag |= OLCUC;
 
-  //115200 baud, 1 stop-bit, no-parity
-  config.c_cflag &= ~(CSTOPB | PARENB | CSIZE | CBAUD);
-  config.c_cflag |= CRTSCTS | CS8;
+  config.c_cflag &= ~(CSTOPB | CSIZE | CBAUD);
+  // config.c_cflag |= CRTSCTS;
+
+  if(COM_TWO_STOPB) config.c_cflag |= CSTOPB;
+
+  switch(COM_PARITY&3) {
+    case 0: config.c_cflag &= ~(PARENB); break;
+    case 1: config.c_cflag |= PARENB | PARODD; break;
+    case 2: config.c_cflag |= PARENB; config.c_cflag &= ~(PARODD); break;
+  }
+
+  switch(COM_DATA_BITS) {
+    case 5: config.c_cflag |= CS5; break;
+    case 6: config.c_cflag |= CS6; break;
+    case 7: config.c_cflag |= CS7; break;
+    case 8: default: config.c_cflag |= CS8; break;
+  }
 
   switch(COM_BAUD) {
     case 0:      config.c_cflag |= B0;     break;
