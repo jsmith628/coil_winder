@@ -8,8 +8,9 @@ axel_diameter = 5;
 neck_height = 80;
 neck_depth = 40;
 neck_width = 25;
-neck_offset = -50;
-neck_base_offset = 10;
+neck_offset = base_depth - neck_depth + 10;
+neck_base_offset = 0;
+neck_indent_size_factor = [1,1.5];
 
 neck_hole_depth = 5;
 
@@ -34,7 +35,8 @@ do_wheels = false;
 $fa = 2;
 $fs = 0.2;
 
-hole_center = neck_base_offset/2+neck_depth/4;
+/* hole_center = neck_base_offset/2+neck_depth/4; */
+hole_center = base_depth/2 - neck_indent_size_factor[0] * neck_depth/2;
 neck_center = neck_offset+neck_depth/2 - base_depth/2;
 
 
@@ -59,7 +61,7 @@ wheel_positions = [
 
 translate([0,0,base_height])
 difference() {
-    
+
     union() {
         //the neck
         hull() {
@@ -81,7 +83,7 @@ difference() {
                linear_extrude(height = epsilon)
                translate([-neck_width/2,-base_depth/2+neck_offset])
                square([neck_width,neck_depth]);
-            
+
             translate([0,0,head_bottom_height])
                linear_extrude(height = epsilon)
                polygon([
@@ -89,9 +91,9 @@ difference() {
                     [head_bottom_width/2, -base_depth/2+neck_offset],
                     [-head_bottom_width/2, -base_depth/2+neck_offset],
                     [-head_bottom_width/2, -base_depth/2+neck_offset+head_bottom_depth],
-                    [0, -base_depth/2+neck_offset+head_bottom_length],            
+                    [0, -base_depth/2+neck_offset+head_bottom_length],
                ]);
-            
+
             translate([0,0,head_height+epsilon/2])
                linear_extrude(height = epsilon)
                polygon([
@@ -99,18 +101,18 @@ difference() {
                     [head_width/2, -base_depth/2+neck_offset+head_offset],
                     [-head_width/2, -base_depth/2+neck_offset+head_offset],
                     [-head_width/2, -base_depth/2+neck_offset+head_width],
-                    [0, -base_depth/2+neck_offset+head_length],            
+                    [0, -base_depth/2+neck_offset+head_length],
                ]);
-            
+
         }
-        
+
     }
 
     //the slot for the wheel
     translate([-wheel_width/2,-M/2,-epsilon]) cube([wheel_width,M,M]);
-    
+
     angle = atan((base_width/2 - neck_width/2)/neck_height);
-    
+
     //the hole in the neck
     mirror_x()
         translate([-base_width/2+epsilon,0,0])
@@ -119,18 +121,18 @@ difference() {
         rotate([0,-90,0])
         linear_extrude(height=M,center=false)
         polygon([
-            [neck_height, neck_center], 
-            [0, neck_base_offset+neck_depth/2-base_depth/2], 
+            [neck_height, neck_center],
+            [0, neck_base_offset+neck_indent_size_factor[1] * neck_depth/2-base_depth/2],
             [0, hole_center],
         ]);
-    
+
     //the holes for the wheels
     for(p = wheel_positions) {
         translate([0,p[0],p[1]])
         rotate([0,90,0])
         cylinder(d=axel_diameter,h=M,center=true);
     }
-    
+
 }
 
 //the wheels (for testing)
@@ -148,12 +150,12 @@ module feed_guide() {
         difference() {
             translate([-wheel_width/2,feed_rounding_radius,0])
                 cube([wheel_width,guide_length-r*2,h-r*2]);
-            
+
             translate([0,0,h/2-r])
                 rotate([90,0,0])
                 cylinder(d=guide_diameter+r*2,h=M,center=true);
-        }    
-        
+        }
+
         sphere(r=feed_rounding_radius);
 
     }
@@ -170,7 +172,7 @@ translate([0,-base_depth/2, base_height]) feed_guide();
 function c(w, m) = sign(cos(w)) * pow(abs(cos(w)), m);
 function s(w, m) = sign(sin(w)) * pow(abs(sin(w)), m);
 
-function super_ellipsoid(A, B, C, r, t, u, v) = 
+function super_ellipsoid(A, B, C, r, t, u, v) =
     [A * c(v, 2/t) * c(u, 2/r),
      B * c(v, 2/t) * s(u, 2/r),
      C * s(v, 2/t)];
@@ -193,7 +195,7 @@ if(do_surprise) {
     m = floor(180 / $fa);
 
     points = [for(i =  [0:n-1]) for(j = [0:m-1]) super_ellipsoid(eye_width/2, eye_length/2, eye_height/2, eye_h_eccentricity, eye_v_eccentricity, i*(360.0/n) - 180, j*(180/(m-1)) - 90)];
-                            
+
     indices1 = [for(i = [0:n-1]) for(v = [1:m-1]) [i*m + v, ((i+1)%n)*m + v, ((i+1)%n)*m + v - 1,] ];
     indices2 = [for(i = [0:n-1]) for(v = [0:m-2]) [i*m + v, i*m + v+1, ((i+1)%n)*m + v,] ];
     indices = concat(indices1, indices2);
@@ -214,4 +216,3 @@ if(do_surprise) {
     scale([0.4,0.4,0.3])
     polyhedron(points, faces = indices);
 }
-
