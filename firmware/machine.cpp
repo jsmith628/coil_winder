@@ -108,7 +108,7 @@ struct JobProgress {
   #define DO_STEP_CLAMP() (STEP_CLAMP_PORT |= 1<<STEP_CLAMP_BIT)
 #endif
 
-#ifdef FEED_DEDGE
+#ifdef DRIVE_DEDGE
   #define DO_STEP_DRIVE() (STEP_DRIVE_PORT ^= 1<<STEP_DRIVE_BIT)
 #else
   #define DO_STEP_DRIVE() (STEP_DRIVE_PORT |= 1<<STEP_DRIVE_BIT)
@@ -149,7 +149,7 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
 #endif
 
 #ifndef DRIVE_DEDGE
-  ISR(TIMER5_COMPB_vect) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); }
+  ISR(TIMER5_COMPB_vect, ISR_NAKED) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); reti(); }
 #endif
 
 bool paused = false;
@@ -399,8 +399,8 @@ void machine_init() {
   clamp.begin();
   clamp.rms_current(CLAMP_CURRENT);
 
-  #ifdef FEED_DEDGE
-    feed.dedge(FEED_DEDGE);
+  #ifdef CLAMP_DEDGE
+    clamp.dedge(CLAMP_DEDGE);
   #endif
 
   clamp.microsteps(CLAMP_MS);

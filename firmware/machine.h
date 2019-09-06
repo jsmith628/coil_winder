@@ -31,20 +31,20 @@
 #define FEED_STEPS_PER_TURN 200
 #define FEED_INVERT_DIR false
 #define FEED_INVERT_EN true
-// #define FEED_DEDGE
+#define FEED_DEDGE
 #define FEED_MS 16
 #define FEED_CURRENT 800
 #define FEED_SGT 15
 #define FEED_RANGE (200-10)
 
-#define EN_DRIVE 62
-#define DIR_DRIVE 48
-#define STEP_DRIVE 46
-#define STEP_DRIVE_PORT PORTL
-#define STEP_DRIVE_BIT PORTL3
+#define EN_DRIVE 24
+#define DIR_DRIVE 28
+#define STEP_DRIVE 26
+#define STEP_DRIVE_PORT PORTA
+#define STEP_DRIVE_BIT PORTL4
 #define DRIVE_INVERT_DIR false
 #define DRIVE_INVERT_EN true
-#define FEED_DEDGE
+// #define DRIVE_DEDGE
 #define DRIVE_MS 1
 #define DRIVE_STEPS_PER_TURN 200
 #define DRIVE_MAX_BASE_SPEED 20
