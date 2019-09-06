@@ -96,80 +96,79 @@ difference() {
           [0, -base_depth/2+neck_offset+head_bottom_length],
           ]);
 
-          translate([0,0,head_height+epsilon/2])
-          linear_extrude(height = epsilon)
-          polygon([
-            [head_width/2, -base_depth/2+neck_offset+head_width],
-            [head_width/2, -base_depth/2+neck_offset+head_offset],
-            [-head_width/2, -base_depth/2+neck_offset+head_offset],
-            [-head_width/2, -base_depth/2+neck_offset+head_width],
-            [0, -base_depth/2+neck_offset+head_length],
-            ]);
-          }
-        } else if(head_shape==1) {
-          hull() {
-
-          }
+        translate([0,0,head_height+epsilon/2])
+        linear_extrude(height = epsilon)
+        polygon([
+          [head_width/2, -base_depth/2+neck_offset+head_width],
+          [head_width/2, -base_depth/2+neck_offset+head_offset],
+          [-head_width/2, -base_depth/2+neck_offset+head_offset],
+          [-head_width/2, -base_depth/2+neck_offset+head_width],
+          [0, -base_depth/2+neck_offset+head_length],
+          ]);
         }
-
-
-      }
-
-      //the slot for the wheel
-      translate([-wheel_width/2,-M/2,-epsilon]) cube([wheel_width,M,M]);
-
-      angle = atan((base_width/2 - neck_width/2)/neck_height);
-
-      //the hole in the neck
-      mirror_x()
-      translate([-base_width/2+epsilon,0,0])
-      rotate([0,angle,0])
-      translate([neck_hole_depth,0,0])
-      rotate([0,-90,0])
-      linear_extrude(height=M,center=false)
-      polygon([
-        [neck_height, neck_center],
-        [0, neck_base_offset+neck_indent_size_factor[1] * neck_depth/2-base_depth/2],
-        [0, hole_center],
-        ]);
-
-        //the holes for the wheels
-        for(p = wheel_positions) {
-          translate([0,p[0],p[1]])
-          rotate([0,90,0])
-          cylinder(d=axel_diameter,h=M,center=true);
-        }
+    } else if(head_shape==1) {
+      hull() {
 
       }
+    }
+  }
 
-      //the wheels (for testing)
-      if(do_wheels)
-      for(p = wheel_positions) {
-        translate([0,p[0],p[1]+base_height])
-        rotate([0,90,0])
-        cylinder(d=wheel_diameter,h=wheel_width+epsilon,center=true);
-      }
+  //the slot for the wheel
+  translate([-wheel_width/2,-M/2,-epsilon]) cube([wheel_width,M,M]);
 
-      module feed_guide() {
-        h = guide_wall_thickness*2 + guide_diameter;
-        r = feed_rounding_radius;
-        minkowski() {
-          difference() {
-            translate([-wheel_width/2,feed_rounding_radius,0])
-            cube([wheel_width,guide_length-r*2,h-r*2]);
+  angle = atan((base_width/2 - neck_width/2)/neck_height);
 
-            translate([0,0,h/2-r])
-            rotate([90,0,0])
-            cylinder(d=guide_diameter+r*2,h=M,center=true);
-          }
+  //the hole in the neck
+  mirror_x()
+  translate([-base_width/2+epsilon,0,0])
+  rotate([0,angle,0])
+  translate([neck_hole_depth,0,0])
+  rotate([0,-90,0])
+  linear_extrude(height=M,center=false)
+  polygon([
+    [neck_height, neck_center],
+    [0, neck_base_offset+neck_indent_size_factor[1] * neck_depth/2-base_depth/2],
+    [0, hole_center],
+    ]);
 
-          sphere(r=feed_rounding_radius);
+    //the holes for the wheels
+    for(p = wheel_positions) {
+      translate([0,p[0],p[1]])
+      rotate([0,90,0])
+      cylinder(d=axel_diameter,h=M,center=true);
+    }
 
-        }
-      }
+}
 
-      translate(
-        [0,
-        neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
-        base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2])
-        feed_guide();
+//the wheels (for testing)
+if(do_wheels)
+for(p = wheel_positions) {
+  translate([0,p[0],p[1]+base_height])
+  rotate([0,90,0])
+  cylinder(d=wheel_diameter,h=wheel_width+epsilon,center=true);
+}
+
+module feed_guide() {
+  h = guide_wall_thickness*2 + guide_diameter;
+  r = feed_rounding_radius;
+  minkowski() {
+    difference() {
+      translate([-wheel_width/2,feed_rounding_radius,0])
+      cube([wheel_width,guide_length-r*2,h-r*2]);
+
+      translate([0,0,h/2-r])
+      rotate([90,0,0])
+      cylinder(d=guide_diameter+r*2,h=M,center=true);
+    }
+
+    sphere(r=feed_rounding_radius);
+
+  }
+}
+
+translate(
+  [0,
+  neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+  base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2]
+)
+  feed_guide();
