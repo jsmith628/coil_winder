@@ -29,7 +29,6 @@ guide_offset = -50;
 guide_wall_thickness = 2.5;
 feed_rounding_radius = 0.7;
 
-do_surprise = false;
 do_wheels = false;
 
 $fa = 2;
@@ -166,53 +165,3 @@ translate(
      neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
      base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2])
 feed_guide();
-
-translate([0,-base_depth/2, base_height]) feed_guide();
-
-function c(w, m) = sign(cos(w)) * pow(abs(cos(w)), m);
-function s(w, m) = sign(sin(w)) * pow(abs(sin(w)), m);
-
-function super_ellipsoid(A, B, C, r, t, u, v) =
-    [A * c(v, 2/t) * c(u, 2/r),
-     B * c(v, 2/t) * s(u, 2/r),
-     C * s(v, 2/t)];
-
-
-eye_width = 13;
-eye_length = 9;
-eye_height = 25;
-eye_h_eccentricity = 2;
-eye_v_eccentricity = 2;
-
-eye_offset_x = 10;
-eye_offset_y = -25;
-eye_offset_z = 7;
-
-pupil_scale = 0.5;
-
-if(do_surprise) {
-    n = floor(360 / $fa);
-    m = floor(180 / $fa);
-
-    points = [for(i =  [0:n-1]) for(j = [0:m-1]) super_ellipsoid(eye_width/2, eye_length/2, eye_height/2, eye_h_eccentricity, eye_v_eccentricity, i*(360.0/n) - 180, j*(180/(m-1)) - 90)];
-
-    indices1 = [for(i = [0:n-1]) for(v = [1:m-1]) [i*m + v, ((i+1)%n)*m + v, ((i+1)%n)*m + v - 1,] ];
-    indices2 = [for(i = [0:n-1]) for(v = [0:m-2]) [i*m + v, i*m + v+1, ((i+1)%n)*m + v,] ];
-    indices = concat(indices1, indices2);
-
-    translate([-eye_offset_x,eye_offset_y,base_height+neck_height+head_height+eye_offset_z])
-    polyhedron(points, faces = indices);
-
-    translate([2,4,-3])
-    translate([-eye_offset_x,eye_offset_y,base_height+neck_height+head_height+eye_offset_z])
-    scale([0.4,0.4,0.3])
-    polyhedron(points, faces = indices);
-
-    translate([eye_offset_x,eye_offset_y,base_height+neck_height+head_height+eye_offset_z])
-    polyhedron(points, faces = indices);
-
-    translate([-2,4,-3])
-    translate([eye_offset_x,eye_offset_y,base_height+neck_height+head_height+eye_offset_z])
-    scale([0.4,0.4,0.3])
-    polyhedron(points, faces = indices);
-}
