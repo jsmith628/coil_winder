@@ -1,4 +1,6 @@
 
+part = 0;
+
 include <carriage.scad>
 
 wheel_width = 10.23;
@@ -48,6 +50,8 @@ guide_wall_thickness = 2.5;
 feed_rounding_radius = 0.7;
 
 do_wheels = false;
+
+do_carriage = part==0 || part==1;
 
 $fa = 2;
 $fs = 0.2;
@@ -191,6 +195,13 @@ difference() {
     cylinder(d=axel_diameter,h=M,center=true);
   }
 
+  translate([-M/2, -base_depth/2+neck_offset+neck_depth, -M/2])
+  if(part==1) {
+    cube([M,M,M]);
+  } else if(part==2) {
+    scale([1,-1,1]) cube([M,M,M]);
+  }
+
 }
 
 //the wheels (for testing)
@@ -219,18 +230,20 @@ module feed_guide() {
   }
 }
 
-if(head_shape == 0)
-  translate(
-    [0,
-    neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
-    base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2]
-  )
-    feed_guide();
-else if(head_shape == 1) {
-  translate(
-    [0,
-    neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
-    base_height+neck_height+head_bottom_height+feed_rounding_radius]
-  )
-    feed_guide();
+if(part==2 || part==0) {
+  if(head_shape == 0) {
+    translate(
+      [0,
+      neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+      base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2]
+    )
+      feed_guide();
+  } else if(head_shape == 1) {
+    translate(
+      [0,
+      neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+      base_height+neck_height+head_bottom_height+feed_rounding_radius]
+    )
+      feed_guide();
+  }
 }

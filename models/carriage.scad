@@ -33,16 +33,18 @@ flange_bearing_bolt_diameter = 5;
 flange_bearing_bolt_offset = 3.0;
 flange_bearing_min_diameter = flange_bearing_bolt_diameter + 2*flange_bearing_bolt_offset;
 
+do_carriage = true;
+
 module flange_bearing() {
-    
+
     hull() {
-        
+
         circle(d=flange_bearing_max_diameter);
-        
+
         mirror_x()
             translate([-flange_bearing_max_width/2+flange_bearing_min_diameter/2,0,0])
             circle(d=flange_bearing_min_diameter);
-        
+
     }
 }
 
@@ -59,7 +61,7 @@ module mirror_y() {
 module screw_hole(Diameter, Length, NutSize, NutThickness, NutDepth, SlotLength) {
     scale([1,1,-1])
         cylinder(d=Diameter, h=Length, center=false);
-    
+
     translate([0,0,-NutDepth])
         rotate([180,0,0])
         linear_extrude(center=SlotLength>0, height=NutThickness)
@@ -82,7 +84,7 @@ module screw_hole(Diameter, Length, NutSize, NutThickness, NutDepth, SlotLength)
                 //[NutSize/2/cos(30),0],
             ]);
         }
-    
+
 }
 
 
@@ -95,24 +97,25 @@ $fs = 0.2;
 
 flange_bearing();*/
 
-translate([0,0,base_height/2]) 
+if(do_carriage)
+translate([0,0,base_height/2])
 difference() {
     cube([base_width, base_depth, base_height], center=true);
-    
+
     //The hole for the threaded rod
-    rotate([0,90,0]) 
+    rotate([0,90,0])
         cylinder(h=M, d=threaded_rod_diameter+2*threaded_rod_tolerance, center=true);
-    
+
     //the threaded rod mount
     translate([base_width/2-threaded_bearing_length,0,0])
     rotate([0,90,0])
         cylinder(h=M, d=threaded_bearing_diameter);
-    
+
     //the threaded rod mount countersink
     translate([base_width/2-threaded_bearing_mount_countersink,0,0])
         rotate([0,90,0])
         cylinder(h=M, d=threaded_bearing_mount_diameter);
-    
+
     //the mounting screw-holes
     translate([base_width/2,0,0])for(i=[0:3]) {
         rotate([90*i,0,0])
@@ -121,7 +124,7 @@ difference() {
             rotate([0,90,0])
             rotate([0,0,0])
             screw_hole(
-                threaded_bearing_bolt_size, 
+                threaded_bearing_bolt_size,
                 threaded_bearing_bolt_length,
                 threaded_bearing_nut_size,
                 M,
@@ -130,11 +133,11 @@ difference() {
                 //threaded_bearing_mount_diameter/2
             );
     }
-    
+
     //the holes for the linear bearings
     mirror_y()
-        translate([0,-rod_spacing]) 
-        rotate([0,90,0]) 
+        translate([0,-rod_spacing])
+        rotate([0,90,0])
         cylinder(h=M, d=linear_bearing_diameter, center=true);
-    
+
 }
