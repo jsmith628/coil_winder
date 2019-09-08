@@ -14,8 +14,7 @@ neck_indent_size_factor = [1,1.5];
 
 neck_hole_depth = 5;
 
-head_shape = 0;
-
+/* head_shape = 0;
 head_bottom_height = 20;
 head_bottom_width = 40;
 head_bottom_depth = 60;
@@ -23,7 +22,24 @@ head_bottom_length = 110;
 head_offset = -10;
 head_height = 30;
 head_width = 20;
+head_length = 150; */
+
+head_shape = 1;
+head_bottom_height = 8;
+head_bottom_width = 38;
+head_bottom_length = 110;
+head_offset = -7;
+head_bottom_depth = neck_depth-head_offset;
+head_height = 24;
+head_width = 20;
 head_length = 150;
+
+bolt_diameter = 2;
+bolt_head_diameter = 3;
+bolt_wall_thickness = 0.5;
+bolt_length = 20;
+nut_size = 4;
+nut_thickness = 1.5;
 
 guide_diameter = 2;
 guide_length = 10;
@@ -54,10 +70,14 @@ slope2 = neck_height/(base_depth-(base_depth-neck_base_offset-neck_depth/2)/4 - 
 slope3 = neck_height/(hole_center-neck_center);
 
 wheel_positions = [
-[neck_center+neck_depth/4+(neck_height-h1)/slope3,h1],
-[-base_depth/2 + neck_base_offset+neck_depth/4-h2/slope1,h2],
-[neck_center+neck_depth/4+(neck_height-h3)/slope3,h3],
-[-base_depth/2+neck_offset+wheel_width/3, neck_height+head_bottom_height -(head_height-head_bottom_height)/2],
+  [neck_center+neck_depth/4+(neck_height-h1)/slope3,h1],
+  [-base_depth/2 + neck_base_offset+neck_depth/4-h2/slope1,h2],
+  [neck_center+neck_depth/4+(neck_height-h3)/slope3,h3],
+  [-base_depth/2+neck_offset+wheel_width, neck_height+head_height/2],
+  /* [
+    -base_depth/2+neck_offset+wheel_width/3,
+    neck_height+head_bottom_height - (head_height-head_bottom_height)/2
+  ], */
 ];
 
 translate([0,0,base_height])
@@ -81,10 +101,8 @@ difference() {
     translate([0,0,neck_height])
     if(head_shape == 0) {
       hull() {
-        translate([0,0,-epsilon/2])
-        linear_extrude(height = epsilon)
-        translate([-neck_width/2,-base_depth/2+neck_offset])
-        square([neck_width,neck_depth]);
+        translate([-neck_width/2,-base_depth/2+neck_offset,-epsilon/2])
+          cube([neck_width, neck_depth, epsilon]);
 
         translate([0,0,head_bottom_height])
         linear_extrude(height = epsilon)
@@ -106,12 +124,47 @@ difference() {
           [0, -base_depth/2+neck_offset+head_length],
           ]);
         }
-    } else if(head_shape==1) {
+    } else if(head_shape == 1) {
       hull() {
+        translate([-neck_width/2,-base_depth/2+neck_offset,-epsilon/2])
+          cube([neck_width, neck_depth, epsilon]);
+
+        translate([-neck_width/2,-base_depth/2+neck_offset,head_height])
+          cube([neck_width, neck_depth, epsilon]);
+
+        head_middle_height = head_height-2*head_bottom_height;
+
+        translate([
+          -head_bottom_width/2,
+          -base_depth/2+neck_offset+head_offset,
+          head_bottom_height
+        ])
+          cube([head_bottom_width, head_bottom_depth, head_middle_height]);
+
+        translate([
+          -head_width/2,
+          -base_depth/2+neck_offset+head_length-head_bottom_depth,
+          head_bottom_height
+        ])
+          cube([head_width,epsilon,guide_diameter+guide_wall_thickness*2]);
 
       }
     }
   }
+
+
+  mirror_x()
+  translate([
+    -head_bottom_width/2+bolt_diameter/2+bolt_wall_thickness,
+    neck_offset-base_depth/2+neck_depth+bolt_wall_thickness*2,
+    neck_height+head_height/2
+  ])
+  rotate([-90,0,0]) {
+    screw_hole(bolt_diameter, bolt_length, 3, nut_thickness, bolt_length-nut_thickness*2, M);
+    translate([0,0,-epsilon]) cylinder(d=bolt_head_diameter, h=M);
+  }
+
+
 
   //the slot for the wheel
   translate([-wheel_width/2,-M/2,-epsilon]) cube([wheel_width,M,M]);
@@ -131,12 +184,12 @@ difference() {
     [0, hole_center],
     ]);
 
-    //the holes for the wheels
-    for(p = wheel_positions) {
-      translate([0,p[0],p[1]])
-      rotate([0,90,0])
-      cylinder(d=axel_diameter,h=M,center=true);
-    }
+  //the holes for the wheels
+  for(p = wheel_positions) {
+    translate([0,p[0],p[1]])
+    rotate([0,90,0])
+    cylinder(d=axel_diameter,h=M,center=true);
+  }
 
 }
 
@@ -166,9 +219,18 @@ module feed_guide() {
   }
 }
 
-translate(
-  [0,
-  neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
-  base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2]
-)
-  feed_guide();
+if(head_shape == 0)
+  translate(
+    [0,
+    neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+    base_height+neck_height+head_bottom_height + (head_height-head_bottom_height)/2-wheel_width/2]
+  )
+    feed_guide();
+else if(head_shape == 1) {
+  translate(
+    [0,
+    neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+    base_height+neck_height+head_bottom_height+feed_rounding_radius]
+  )
+    feed_guide();
+}
