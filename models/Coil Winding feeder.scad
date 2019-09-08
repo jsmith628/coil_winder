@@ -36,12 +36,13 @@ head_height = 24;
 head_width = 20;
 head_length = 150;
 
-bolt_diameter = 2;
-bolt_head_diameter = 3;
-bolt_wall_thickness = 0.5;
+bolt_diameter = 3;
+bolt_head_diameter = 5;
+bolt_wall_thickness = 2;
+bolt_offset = 2;
 bolt_length = 20;
-nut_size = 4;
-nut_thickness = 1.5;
+nut_size = 6.03;
+nut_thickness = 2.4;
 
 guide_diameter = 2;
 guide_length = 10;
@@ -157,13 +158,15 @@ difference() {
   }
 
 
+  //the screw holes for the top part
   mirror_x()
   translate([
     -head_bottom_width/2+bolt_diameter/2+bolt_wall_thickness,
-    neck_offset-base_depth/2+neck_depth+bolt_wall_thickness*2,
+    neck_offset-base_depth/2+neck_depth+bolt_offset,
     neck_height+head_height/2
   ])
-  rotate([-90,0,0]) {
+  rotate([-90,0,0])
+  rotate([0,0,180]) {
     screw_hole(bolt_diameter, bolt_length, 3, nut_thickness, bolt_length-nut_thickness*2, M);
     translate([0,0,-epsilon]) cylinder(d=bolt_head_diameter, h=M);
   }
