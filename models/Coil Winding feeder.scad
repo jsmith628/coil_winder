@@ -34,7 +34,7 @@ head_offset = -7;
 head_bottom_depth = neck_depth-head_offset;
 head_height = 24;
 head_width = 20;
-head_length = 150;
+head_length = 100;
 
 bolt_diameter = 3;
 bolt_head_diameter = 5;
@@ -155,7 +155,7 @@ difference() {
 
         translate([
           -head_width/2,
-          -base_depth/2+neck_offset+head_length-head_bottom_depth,
+          -base_depth/2+neck_offset+head_length,
           head_bottom_height
         ])
           cube([head_width,epsilon,guide_diameter+guide_wall_thickness*2]);
@@ -232,7 +232,8 @@ module feed_guide() {
 
       translate([0,0,h/2-r])
       rotate([90,0,0])
-      cylinder(d=guide_diameter+r*2,h=M,center=true);
+      rotate([0,0,45])
+      cube([guide_diameter+r*2,guide_diameter+r*2,M], center=true);
     }
 
     sphere(r=feed_rounding_radius);
@@ -313,7 +314,7 @@ if(part==2 || part==0) {
   } else if(head_shape == 1) {
     translate(
       [0,
-      neck_offset-base_depth/2+head_length + guide_offset - wheel_width,
+      neck_offset-base_depth/2+head_length + head_bottom_depth + guide_offset - wheel_width,
       base_height+neck_height+head_bottom_height+feed_rounding_radius]
     )
       feed_guide();
