@@ -51,8 +51,8 @@ guide_wall_thickness = 2.5;
 feed_rounding_radius = 0.7;
 
 holder_base_width = 30;
-holder_width = 7;
-holder_diameter = 10;
+holder_width = 6;
+holder_diameter = 7.5;
 holder_offset = 40;
 holder_outer_diameter = 15;
 
