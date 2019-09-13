@@ -50,6 +50,13 @@ guide_offset = -50;
 guide_wall_thickness = 2.5;
 feed_rounding_radius = 0.7;
 
+holder_base_width = 30;
+holder_width = 7;
+holder_diameter = 10;
+holder_offset = 40;
+holder_outer_diameter = 15;
+
+do_holder = true;
 do_wheels = false;
 
 do_carriage = part==0 || part==1;
@@ -232,6 +239,68 @@ module feed_guide() {
 
   }
 }
+
+translate([0, -base_depth/2, base_height]) feed_guide();
+
+//the spool holder
+if(do_holder) {
+  neck_base_width = (base_width-wheel_width)/2;
+  real_neck_width = (neck_width-wheel_width)/2;
+
+  angle = atan(neck_height/neck_offset);
+  tangent = sqrt(neck_offset*neck_offset + neck_height*neck_height) / (neck_base_width - real_neck_width);
+
+  top_offset = -holder_base_width/tangent;
+  top_length = neck_base_width + top_offset;
+
+  echo(tangent);
+
+  translate([0,-base_depth/2, base_height])
+  rotate([angle,0,0])
+  translate([0,0,-epsilon/2]) {
+    //the base
+    intersection() {
+
+      //makes the base line up with the outer edge
+      mirror_x()
+      translate([wheel_width/2,0,0])
+      linear_extrude(M)
+      polygon(
+        [[neck_base_width-holder_width,0],[neck_base_width,0],
+        [top_length,holder_base_width], [neck_base_width-holder_width,holder_base_width]]
+      );
+
+      union() {
+        translate([0,holder_base_width/2,holder_offset])
+        rotate([0,-90,0])
+        cylinder(d=holder_outer_diameter,h=M,center=false);
+
+        //the general shape
+        translate([wheel_width/2,0,0])
+        hull() {
+
+          translate([0,holder_base_width/2,holder_offset])
+          rotate([0,90,0])
+          cylinder(d=holder_outer_diameter,h=M,center=false);
+
+          cube([M,holder_base_width,epsilon]);
+
+        }
+      }
+
+
+    }
+
+    //the actual holder
+    translate([0,holder_base_width/2,holder_offset])
+    rotate([0,-90,0])
+    cylinder(d=holder_diameter,h=base_width-holder_width*2,,center=true);
+
+  }
+
+
+}
+
 
 if(part==2 || part==0) {
   if(head_shape == 0) {
