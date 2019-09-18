@@ -37,12 +37,12 @@ head_width = 20;
 head_length = 100;
 
 bolt_diameter = 3;
-bolt_head_diameter = 5;
+bolt_head_diameter = 5.7;
 bolt_wall_thickness = 2;
 bolt_offset = 2;
-bolt_length = 20;
+bolt_length = 21;
 nut_size = 6.03;
-nut_thickness = 2.4;
+nut_thickness = 2.9;
 
 guide_diameter = 2;
 guide_length = 10;
@@ -174,7 +174,7 @@ difference() {
   ])
   rotate([-90,0,0])
   rotate([0,0,180]) {
-    screw_hole(bolt_diameter, bolt_length, 3, nut_thickness, bolt_length-nut_thickness*2, M);
+    screw_hole(bolt_diameter, bolt_length, nut_size, nut_thickness, bolt_length-nut_thickness*2, M);
     translate([0,0,-epsilon]) cylinder(d=bolt_head_diameter, h=M);
   }
 
