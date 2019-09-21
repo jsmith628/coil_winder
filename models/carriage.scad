@@ -11,8 +11,8 @@ linear_bearing_diameter = 15.2;
 linear_bearing_length = 23.8;
 
 threaded_bearing_length = 13.5;
-threaded_bearing_diameter = 10.16 + 0.6;
-threaded_bearing_mount_diameter = 22.5 + 0.6;
+threaded_bearing_diameter = 10.16 + 0.8;
+threaded_bearing_mount_diameter = 22.5 + 0.8;
 threaded_bearing_mount_countersink = 3.5;
 threaded_bearing_bolt_spacing = 11;
 
