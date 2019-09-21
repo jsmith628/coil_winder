@@ -83,15 +83,26 @@ uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
 }
 
 struct JobProgress {
+  volatile bool dir = false;
+  volatile u32 total = 0;
+
   volatile bool running = false;
   volatile u32 remaining = 0;
+
   volatile EndConditionType end;
   void (* volatile callback)(const void*) = NULL;
   const void * volatile callback_args = NULL;
 } current_jobs[SUBJOBS_PER_JOB];
 
+int32_t steps_taken_last_job[SUBJOBS_PER_JOB] = {0,0,0,0};
+
+int32_t steps_moved(uint8_t axis) {return steps_taken_last_job[axis];}
+
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
+  steps_taken_last_job[id] = \
+    (current_jobs[id].dir ? -1 : 1) * \
+    ((int32_t) current_jobs[id].total - (int32_t) current_jobs[id].remaining); \
   *timers[id].tccrnb = 0; \
   *timers[id].timsk = 0; \
 }
@@ -136,7 +147,7 @@ ISR(TIMER2_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 // ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
 ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
-ISR(TIMER5_COMPA_vect) { DO_JOB(2, DO_STEP_DRIVE) }
+ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
 
 #define DIRECT_REGISTER(port) (((uint8_t) port) <= 0x1F)
 
@@ -263,9 +274,15 @@ void machine_loop() {
 
           if(next.dir!=KEEP) {
             switch(id) {
-              case 0: digitalWrite(DIR_FEED, next.dir==SET ^ FEED_INVERT_DIR ? HIGH : LOW); break;
-              case 1: digitalWrite(DIR_CLAMP, next.dir==SET ^ CLAMP_INVERT_DIR ? HIGH : LOW); break;
-              case 2: digitalWrite(DIR_DRIVE, next.dir==SET ^ DRIVE_INVERT_DIR ? HIGH : LOW); break;
+              case 0:
+                current_jobs[id].dir = next.dir==SET;
+                digitalWrite(DIR_FEED, current_jobs[id].dir ^ FEED_INVERT_DIR ? HIGH : LOW); break;
+              case 1:
+                current_jobs[id].dir = next.dir==SET;
+                digitalWrite(DIR_CLAMP, current_jobs[id].dir ^ CLAMP_INVERT_DIR ? HIGH : LOW); break;
+              case 2:
+                current_jobs[id].dir = next.dir==SET;
+                digitalWrite(DIR_DRIVE, current_jobs[id].dir ^ DRIVE_INVERT_DIR ? HIGH : LOW); break;
             }
           }
 
@@ -286,13 +303,13 @@ void machine_loop() {
           switch(end.ty) {
             case COUNT:
               if(end.cond > 0 && next.frequency > 0) {
-                current_jobs[id].remaining = end.cond;
+                current_jobs[id].total = current_jobs[id].remaining = end.cond;
                 current_jobs[id].running = true;
               }
               break;
             case STALL_GUARD:
               current_jobs[id].running = true;
-              current_jobs[id].remaining = ~0;
+              current_jobs[id].total = current_jobs[id].remaining = ~0;
               switch(id) {
                 case 0:
                   feed.sgt(end.cond);
@@ -306,7 +323,7 @@ void machine_loop() {
               break;
             case FOREVER:
               current_jobs[id].running = true;
-              current_jobs[id].remaining = ~0;
+              current_jobs[id].total = current_jobs[id].remaining = ~0;
               break;
             case IMMEDIATE: break;
           }

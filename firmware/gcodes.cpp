@@ -35,6 +35,8 @@ typedef struct {
   float pos; //current units
   int32_t zero; //steps
 
+  bool homing;
+
   float steps_per_unit;
   const float steps_per_machine_unit;
 
@@ -42,9 +44,9 @@ typedef struct {
 } Axis;
 
 Axis axes[NUM_AXES] = {
-  {'A', 0,-FEED_STEP_RANGE,0, 0.0,0, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
-  {'B', 0,-CLAMP_STEP_RANGE,0, 0.0,0, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
-  {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
+  {'A', 0,-FEED_STEP_RANGE,0, 0.0,0,false, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
+  {'B', 0,-CLAMP_STEP_RANGE,0, 0.0,0,false, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
+  {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0,false, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
 };
 
 bool endstops_enabled = true;
@@ -127,6 +129,16 @@ void set_incremental_coords(byte axis) {
   axes[axis].coords = INCREMENTAL;
 }
 
+void update_hw_pos(const void* args) {
+
+  byte i = (byte) (int) args;
+
+  axes[i].machine_pos += steps_moved(i);
+  axes[i].pos = pos_from_steps(i, axes[i].machine_pos);
+  axes[i].homing = false;
+
+}
+
 float last_feedrate = DEFAULT_FEEDRATE;
 
 inline float next_feedrate(float f) {
@@ -174,7 +186,10 @@ void print_callback(const void* msg) {
 //control functions
 
 //returns the min number of commands available in the queue
-bool queue_open() { return job_queue_open(); }
+bool queue_open() {
+  for(byte i=0; i<NUM_AXES; i++) if(axes[i].homing) return false;
+  return job_queue_open();
+}
 
 //cancels the last command put into the queue (assuming it hasn't started yet)
 void cancel() {
@@ -319,41 +334,53 @@ void g21 () {
   Serial.println("Using Millimeters");
 }
 
+void feed_until_skip(bool do_zero, int8_t axis_dirs[]) {
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+
+  for(byte i=0; i<NUM_AXES; i++) {
+    if(axis_dirs[i]!=0) {
+      next.jobs[i].frequency = (uint16_t) (6.0*axes[i].steps_per_machine_unit);
+      next.jobs[i].dir = axis_dirs[i]<0 ? SET : UNSET;
+      next.jobs[i].end.ty = STALL_GUARD;
+      next.jobs[i].end.cond = FEED_SGT;
+
+      if(do_zero) {
+        for(byte i=0; i<NUM_AXES; i++) {
+          if(axis_dirs)
+          axes[i].machine_pos = 0;
+          axes[i].pos = pos_from_steps(i,0);
+        }
+      } else {
+        next.jobs[i].callback = update_hw_pos;
+        next.jobs[i].callback_args = (void *) (int) i;
+        axes[i].homing = true;
+      }
+
+    }
+  }
+
+  queue_jobs(next);
+
+
+
+}
+
 //Home axis (A final position, B final position)
 void g28 (bool a, bool b) {
   if(!a && !b){
     a = true;
     b = true;
   }
+  int8_t dirs[NUM_AXES] = {(int8_t) (a?1:0), (int8_t) (b?1:0), (int8_t) 0};
 
-  g31(a?1:0, b?1:0);
-
-  axes[A_AXIS].machine_pos = 0;
-  axes[A_AXIS].pos = pos_from_steps(A_AXIS,0);
-  axes[B_AXIS].machine_pos = 0;
-  axes[B_AXIS].pos = pos_from_steps(B_AXIS,0);
+  feed_until_skip(true, dirs);
 
 }
 
 //Feed until skip (A axis enable, B axis enable)
 void g31 (int8_t a, int8_t b) {
-  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
-
-  if(a!=0) {
-    next.jobs[A_AXIS].frequency = (uint16_t) (6.0*axes[A_AXIS].steps_per_machine_unit);
-    next.jobs[A_AXIS].dir = a<0 ? SET : UNSET;
-    next.jobs[A_AXIS].end.ty = STALL_GUARD;
-    next.jobs[A_AXIS].end.cond = FEED_SGT;
-  }
-
-  if(b!=0) {
-    next.jobs[B_AXIS].frequency = (uint16_t) (6.0*axes[B_AXIS].steps_per_machine_unit);
-    next.jobs[B_AXIS].dir = a<0 ? SET : UNSET;
-    next.jobs[B_AXIS].end.ty = STALL_GUARD;
-    next.jobs[B_AXIS].end.cond = CLAMP_SGT;
-  }
-
-  queue_jobs(next);
+  int8_t dirs[NUM_AXES] = {a,b,0};
+  feed_until_skip(false, dirs);
 }
 
 //Define maximum spindle Speed (Speed)

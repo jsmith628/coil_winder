@@ -118,6 +118,6 @@ bool busy();
 void machine_loop();
 void machine_init();
 
-
+int32_t steps_moved(uint8_t axis);
 
 #endif
