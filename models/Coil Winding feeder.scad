@@ -34,7 +34,7 @@ head_offset = -7;
 head_bottom_depth = neck_depth-head_offset;
 head_height = 24;
 head_width = 20;
-head_length = 80;
+head_length = 95;
 
 bolt_diameter = 3;
 bolt_head_diameter = 5.7;
