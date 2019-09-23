@@ -8,14 +8,15 @@ bool comments = false;
 bool finishingMove = false;
 bool waitOnStart = false;
 bool imperial = false;
-int turns = 0;
-int finishingTurns = 0;
-float wireGauge = 0;
-float shaftLength = 0;
-float turnsPerDir = 0;
-float feedrate = 0;
-float startOffset = 0;
+int turns = -1;
+int finishingTurns = -1;
+float wireGauge = -1;
+float shaftLength = -1;
+float turnsPerDir = -1;
+float feedrate = -1;
+float startOffset = -1;
 char *name = NULL;
+char *path = "gcode_gen.conf";
 
 int parameters;
 float passes;
@@ -26,19 +27,19 @@ void init(){
   char buffer[65];
 
   FILE *fp;
-  fp = fopen ("gcode_gen.conf","r");
+  fp = fopen (path,"r");
   if (fp!=NULL){
      while(fgets(&buffer[0], 65, fp) != NULL){
         if ((&buffer[0] != "#")&&(&buffer[0] != " ")){
-          if((strncmp(&buffer[0], "wireGauge", 9) == 0) && (wireGauge == 0)){
+          if((strncmp(&buffer[0], "wireGauge", 9) == 0) && (wireGauge == -1)){
             wireGauge =  atof(&buffer[9]);
-          }else if((strncmp(&buffer[0], "shaftLength", 11) == 0) && (shaftLength == 0)){
+          }else if((strncmp(&buffer[0], "shaftLength", 11) == 0) && (shaftLength == -1)){
             shaftLength = atof(&buffer[11]);
-          }else if((strncmp(&buffer[0], "turns", 5) == 0) && (turns == 0)){
+          }else if((strncmp(&buffer[0], "turns", 5) == 0) && (turns == -1)){
             turns = atof(&buffer[5]);
-          }else if((strncmp(&buffer[0], "feedrate", 8) == 0) && (feedrate == 0)){
+          }else if((strncmp(&buffer[0], "feedrate", 8) == 0) && (feedrate == -1)){
             feedrate = atof(&buffer[8]);
-          }else if((strncmp(&buffer[0], "startOffset", 11) == 0) && (startOffset == 0)){
+          }else if((strncmp(&buffer[0], "startOffset", 11) == 0) && (startOffset == -1)){
             startOffset = atoi(&buffer[11]);
           }else if((strncmp(&buffer[0], "comments", 8) == 0)&&(comments == false)){
             comments = (atoi(&buffer[8])>0);
@@ -64,9 +65,11 @@ void init(){
 void gen(FILE * out){
   int x = 0;
   bool dir = true;
-  fprintf(out,((comments) ? "%s G91 ;\nM17 ;\nG28 ;\nG0 A%.2f F%.2f ;\n%s" : "%s G91 ;\nM17 ;\nG28 ;\nG0 A%.2f F%.2f ;\n%s"),(imperial) ? "G20" : "G21" ,startOffset, feedrate, (waitOnStart) ? "M0 ;\n" : "");
+  fprintf(out,("%s G91 ;\nM17 ;\nG0 A%.2f F%.2f ;\n%s"),(imperial) ? "G20" : "G21" ,startOffset, feedrate, (waitOnStart) ? "M0 ;\n" : "");
+
   if((int)passes > 0){
     fprintf(out, ((comments) ? "G0 %s%.2f W%.4f F%.2f ; Begin coiling cycles\n" : "G0 %s%.2f W%.4f F%.2f ;\n"), (dir) ? "A" : "A-", shaftLength, turnsPerDir, feedrate);
+    dir = false;
     x++;
   }
   while (x < (int)passes){
@@ -88,7 +91,7 @@ void gen(FILE * out){
 }
 int main(int argc, char *argv[]) {
 
-  while ((parameters = getopt(argc, argv, "o:t:f:g:l:p:cmiw")) != -1){
+  while ((parameters = getopt(argc, argv, "o:t:f:g:l:p:q:cmiw")) != -1){
     switch (parameters) {
       case 'o':
         name = optarg;
@@ -122,6 +125,9 @@ int main(int argc, char *argv[]) {
         break;
       case 'w':
         waitOnStart = true;
+        break;
+      case 'q':
+        path = optarg;
         break;
     }
   }
