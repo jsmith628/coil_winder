@@ -34,7 +34,7 @@ head_offset = -7;
 head_bottom_depth = neck_depth-head_offset;
 head_height = 24;
 head_width = 20;
-head_length = 100;
+head_length = 80;
 
 bolt_diameter = 3;
 bolt_head_diameter = 5.7;
@@ -241,10 +241,10 @@ module feed_guide() {
   }
 }
 
-translate([0, -base_depth/2, base_height]) feed_guide();
+if(part<2) translate([0, -base_depth/2, base_height]) feed_guide();
 
 //the spool holder
-if(do_holder) {
+if(do_holder && part<2) {
   neck_base_width = (base_width-wheel_width)/2;
   real_neck_width = (neck_width-wheel_width)/2;
 
@@ -253,8 +253,6 @@ if(do_holder) {
 
   top_offset = -holder_base_width/tangent;
   top_length = neck_base_width + top_offset;
-
-  echo(tangent);
 
   translate([0,-base_depth/2, base_height])
   rotate([angle,0,0])
