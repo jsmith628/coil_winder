@@ -417,7 +417,9 @@ void machine_init() {
   clamp.rms_current(CLAMP_CURRENT);
 
   #ifdef CLAMP_DEDGE
-    clamp.dedge(CLAMP_DEDGE);
+    clamp.dedge(true);
+  #else
+    clamp.dedge(false);
   #endif
 
   clamp.microsteps(CLAMP_MS);
@@ -429,7 +431,9 @@ void machine_init() {
   feed.rms_current(FEED_CURRENT);
 
   #ifdef FEED_DEDGE
-    feed.dedge(FEED_DEDGE);
+    feed.dedge(true);
+  #else
+    feed.dedge(false);
   #endif
 
   feed.microsteps(FEED_MS);
