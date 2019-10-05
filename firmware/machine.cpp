@@ -15,8 +15,52 @@ typedef unsigned long u32;
 Stepper clamp = Stepper(EN_CLAMP, DIR_CLAMP, STEP_CLAMP, CS_CLAMP);
 Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
 
-const byte prescaling_16_bit[6] = {1,3,3,2,2,0};
-const byte prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
+const uint8_t prescaling_16_bit[6] = {1,3,3,2,2,0};
+const uint8_t prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
+
+#define FREQ_STEP 1
+
+#define LUT_INIT1(f)     (period_from_frequency(f))
+#define LUT_INIT2(f)     LUT_INIT1(f),     LUT_INIT1((f+1*FREQ_STEP))
+#define LUT_INIT4(f)     LUT_INIT2(f),     LUT_INIT2((f+2*FREQ_STEP))
+#define LUT_INIT8(f)     LUT_INIT4(f),     LUT_INIT4((f+4*FREQ_STEP))
+#define LUT_INIT16(f)    LUT_INIT8(f),     LUT_INIT8((f+8*FREQ_STEP))
+#define LUT_INIT32(f)    LUT_INIT16(f),    LUT_INIT16((f+16*FREQ_STEP))
+#define LUT_INIT64(f)    LUT_INIT32(f),    LUT_INIT32((f+32*FREQ_STEP))
+#define LUT_INIT128(f)   LUT_INIT64(f),    LUT_INIT64((f+64*FREQ_STEP))
+#define LUT_INIT256(f)   LUT_INIT128(f),   LUT_INIT128((f+128*FREQ_STEP))
+#define LUT_INIT512(f)   LUT_INIT256(f),   LUT_INIT256((f+256*FREQ_STEP))
+#define LUT_INIT1024(f)  LUT_INIT512(f),   LUT_INIT512((f+512*FREQ_STEP))
+#define LUT_INIT2048(f)  LUT_INIT1024(f),  LUT_INIT1024((f+1024*FREQ_STEP))
+#define LUT_INIT4096(f)  LUT_INIT2048(f),  LUT_INIT2048((f+2048*FREQ_STEP))
+#define LUT_INIT8192(f)  LUT_INIT4096(f),  LUT_INIT4096((f+4096*FREQ_STEP))
+#define LUT_INIT16384(f) LUT_INIT8192(f),  LUT_INIT8192((f+8192*FREQ_STEP))
+
+typedef struct {
+  const uint8_t prescale;
+  const uint16_t period;
+} Period;
+
+constexpr Period period_from_frequency(uint16_t f) {
+  uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) f;
+  uint8_t prescaling = 1;
+
+  while((period & 0xFFFF0000) && prescaling_16_bit[prescaling]!=0) {
+    uint8_t pre_mul = prescaling_16_bit[prescaling];
+
+    if(period & (1<<(pre_mul-1))) {
+      period = (period>>pre_mul) + 1;
+    } else {
+      period = (period>>pre_mul);
+    }
+
+    prescaling++;
+  }
+
+  return {prescaling, (uint16_t) period};
+}
+
+const PROGMEM Period periodsLUT[8192] = { LUT_INIT8192(1) };
 
 //A handy container object for all of the timer registers
 typedef struct {
@@ -213,6 +257,15 @@ inline bool idempotent(Job j) {
 }
 
 bool queue_jobs(Jobs j) {
+  for(uint16_t i=0; i<8192; i++) {
+    Serial.print("f=");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(pgm_read_byte_near(&(periodsLUT[i].prescale)), BIN);
+    Serial.print(" ");
+    Serial.println(pgm_read_word_near(&(periodsLUT[i].period)));
+  }
+
   byte count = 0;
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
     if(!idempotent(j.jobs[i])) {
