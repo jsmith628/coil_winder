@@ -461,41 +461,54 @@ void g95() {feed_mode = FEEDRATE_DIST;}
 //Unconditional stop
 void m0() {}
 
-//Enable steppers
-void m17() {
-  Jobs next;
-  for(byte i=0; i<3; i++) {
-    next.jobs[i] = NOOP_JOB;
-    next.jobs[i].en = SET;
+void enable_stepper(const void * axis) { enable_stepper((uint8_t) (uint16_t) axis); }
+void disable_stepper(const void * axis) { disable_stepper((uint8_t) (uint16_t) axis); }
+
+void print_enable_status(const void * steppers) {
+  uint16_t bits = (uint16_t) steppers;
+
+  bool all_enabled = true;
+  for(uint8_t i=0; i<NUM_AXES; i++) all_enabled = all_enabled && ((bits & (1<<i)) != 0);
+
+  if(all_enabled) {
+    Serial.println("Steppers enabled");
+  } else {
+    bool first = true;
+    for(uint8_t i=0; i<NUM_AXES; i++) {
+      if((bits & (1<<i)) != 0) {
+        if(!first) Serial.print(" and ");
+        Serial.print(axes[i].name);
+        first = false;
+      }
+    }
+    Serial.println(" enabled");
   }
-  next.jobs[3] = NOOP_JOB;
-  next.jobs[3].callback = println_callback;
-  next.jobs[3].callback_args = "Steppers enabled";
-  queue_jobs(next);
+
 }
 
+//Enable steppers
+void m17() { m17(true, true, true); }
+
 //Enable Steppers
-void m17(bool a, bool b, bool c){
+void m17(bool a, bool b, bool w){
   Jobs next;
-  if(a){
-    next.jobs[A_AXIS] = NOOP_JOB;
-    next.jobs[A_AXIS].en = SET;
-    next.jobs[A_AXIS].callback = println_callback;
-    next.jobs[A_AXIS].callback_args = "A-axis enabled";
+  bool enable[3] = {a,b,w};
+
+  uint16_t args = 0;
+
+  for(uint8_t i=0; i<3; i++) {
+    next.jobs[i] = NOOP_JOB;
+    if(enable[i]) {
+      next.jobs[i].callback = enable_stepper;
+      next.jobs[i].callback_args = (void*) (uint16_t) i;
+      args |= (1<<i);
+    }
   }
-  if(b){
-    next.jobs[B_AXIS] = NOOP_JOB;
-    next.jobs[B_AXIS].en = SET;
-    next.jobs[B_AXIS].callback = println_callback;
-    next.jobs[B_AXIS].callback_args = "B-axis enabled";
-  }
-  if(c){
-    next.jobs[W_AXIS] = NOOP_JOB;
-    next.jobs[W_AXIS].en = SET;
-    next.jobs[W_AXIS].callback = println_callback;
-    next.jobs[W_AXIS].callback_args = "W-axis enabled";
-  }
+
   next.jobs[3] = NOOP_JOB;
+  next.jobs[3].callback = print_enable_status;
+  next.jobs[3].callback_args = (void*) args;
+
 
   queue_jobs(next);
 }
@@ -503,13 +516,14 @@ void m17(bool a, bool b, bool c){
 //Disable steppers
 void m18() {
   Jobs next;
-  for(byte i=0; i<3; i++) {
+  for(byte i=0; i<NUM_AXES; i++) {
     next.jobs[i] = NOOP_JOB;
-    next.jobs[i].en = UNSET;
+    next.jobs[i].callback = disable_stepper;
+    next.jobs[i].callback_args = (void*) (uint16_t) i;
   }
-  next.jobs[3] = NOOP_JOB;
-  next.jobs[3].callback = println_callback;
-  next.jobs[3].callback_args = "Steppers disabled";
+  next.jobs[NUM_AXES] = NOOP_JOB;
+  next.jobs[NUM_AXES].callback = println_callback;
+  next.jobs[NUM_AXES].callback_args = "Steppers disabled";
   queue_jobs(next);
 }
 
@@ -537,9 +551,7 @@ void m99() {}
 
 //Emergency stop, immediately stop program and disable all steppers
 void m112() {
-  digitalWrite(EN_FEED, FEED_INVERT_EN ? HIGH : LOW);
-  digitalWrite(EN_CLAMP, CLAMP_INVERT_EN ? HIGH : LOW);
-  digitalWrite(EN_DRIVE, DRIVE_INVERT_EN ? HIGH : LOW);
+  for(uint8_t i=0; i<NUM_AXES; i++) disable_stepper(i);
   clear_jobs();
   Serial.println("Emergency Stop!");
 }

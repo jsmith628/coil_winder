@@ -58,6 +58,7 @@ void m0();
 
 //Enable steppers
 void m17();
+void m17(bool a, bool b, bool w);
 
 //Disable steppers
 void m18();

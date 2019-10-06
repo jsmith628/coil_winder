@@ -92,7 +92,11 @@ void interpret_gcode(command c){
         m0();
         break;
       case 17:
-        m17();
+        if((c.modifiers[A].c != 0)||(c.modifiers[B].c != 0)||(c.modifiers[W].c != 0)){
+          m17((c.modifiers[A].c != 0), (c.modifiers[B].c != 0), (c.modifiers[W].c != 0));
+        }else{
+          m17();
+        }
         break;
       case 18:
         m18();

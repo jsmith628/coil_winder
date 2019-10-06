@@ -202,6 +202,17 @@ ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
   ISR(TIMER5_COMPB_vect, ISR_NAKED) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); reti(); }
 #endif
 
+void set_enable(uint8_t axis, bool set) {
+  switch(axis) {
+    case 0: digitalWrite(EN_FEED, (set ^ FEED_INVERT_EN) ? HIGH : LOW); break;
+    case 1: digitalWrite(EN_CLAMP, (set ^ CLAMP_INVERT_EN) ? HIGH : LOW); break;
+    case 2: digitalWrite(EN_DRIVE, (set ^ DRIVE_INVERT_EN) ? HIGH : LOW); break;
+  }
+}
+
+void enable_stepper(uint8_t axis) { set_enable(axis, true); }
+void disable_stepper(uint8_t axis) { set_enable(axis, false); }
+
 void set_max_acceleration(uint8_t axis, uint16_t accel) {
   if(axis < SUBJOBS_PER_JOB) current_jobs[axis].max_acceleration = accel;
 }
@@ -284,7 +295,7 @@ void clear_jobs() {
 
 
 inline bool idempotent(Job j) {
-  return j.en==KEEP && j.dir==KEEP &&
+  return j.dir==KEEP &&
   (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) &&
   j.callback == NULL;
 }
@@ -375,14 +386,6 @@ void machine_loop() {
               case 2:
                 current_jobs[id].dir = next.dir==SET;
                 digitalWrite(DIR_DRIVE, current_jobs[id].dir ^ DRIVE_INVERT_DIR ? HIGH : LOW); break;
-            }
-          }
-
-          if(next.en!=KEEP) {
-            switch(id) {
-              case 0: digitalWrite(EN_FEED, next.en==SET ^ FEED_INVERT_EN ? HIGH : LOW); break;
-              case 1: digitalWrite(EN_CLAMP, next.en==SET ^ CLAMP_INVERT_EN ? HIGH : LOW); break;
-              case 2: digitalWrite(EN_DRIVE, next.en==SET ^ DRIVE_INVERT_EN ? HIGH : LOW); break;
             }
           }
 
