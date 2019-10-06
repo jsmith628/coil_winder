@@ -95,7 +95,6 @@ LUT_INIT(PERIOD_LUT_FREQ_START, (1<<PERIOD_LUT_FREQ_STEP), PERIOD_LUT_SIZE)
 
 struct JobProgress {
 
-  volatile bool dir = false;
   volatile bool running = false;
   volatile bool accelerating = false;
   volatile bool paused = false;
@@ -104,8 +103,8 @@ struct JobProgress {
   volatile uint32_t remaining = 0;
   volatile  int32_t last = 0;
 
-  volatile uint16_t target_frequency = 0;
-  volatile uint16_t frequency = 0;
+  volatile int16_t target_frequency = 0;
+  volatile int16_t frequency = 0;
   volatile uint16_t max_acceleration = 0;
   volatile uint16_t start_acceleration = ~0;
   volatile uint16_t acceleration = 0;
@@ -123,7 +122,7 @@ int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
   current_jobs[id].last = \
-    (current_jobs[id].dir ? -1 : 1) * \
+    (current_jobs[id].frequency<0 ? -1 : 1) * \
     ((int32_t) current_jobs[id].total - (int32_t) current_jobs[id].remaining); \
   *timers[id].tccrnb = 0; \
   *timers[id].timsk = 0; \
@@ -243,7 +242,7 @@ ISR(TIMER2_COMPA_vect) {
 
       current_jobs[i].frequency = f;
       *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111)) | pgm_read_byte_near(&periodsLUT[f].prescale);
-      *timers[i].ocra = pgm_read_word_near(&periodsLUT[f >> PERIOD_LUT_FREQ_STEP].period);
+      *timers[i].ocra = pgm_read_word_near(&periodsLUT[(uint16_t) abs(f) >> PERIOD_LUT_FREQ_STEP].period);
 
     }
   }
@@ -295,9 +294,7 @@ void clear_jobs() {
 
 
 inline bool idempotent(Job j) {
-  return j.dir==KEEP &&
-  (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) &&
-  j.callback == NULL;
+  return (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) && j.callback == NULL;
 }
 
 bool queue_jobs(Jobs j) {
@@ -375,17 +372,17 @@ void machine_loop() {
           Job next = job_queue.pop_top();
           byte id = next.axis;
 
-          if(next.dir!=KEEP) {
+          if(next.frequency!=0) {
             switch(id) {
               case 0:
-                current_jobs[id].dir = next.dir==SET;
-                digitalWrite(DIR_FEED, current_jobs[id].dir ^ FEED_INVERT_DIR ? HIGH : LOW); break;
+                digitalWrite(DIR_FEED, next.frequency>=0 ^ FEED_INVERT_DIR ? HIGH : LOW);
+                break;
               case 1:
-                current_jobs[id].dir = next.dir==SET;
-                digitalWrite(DIR_CLAMP, current_jobs[id].dir ^ CLAMP_INVERT_DIR ? HIGH : LOW); break;
+                digitalWrite(DIR_CLAMP, next.frequency>=0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
+                break;
               case 2:
-                current_jobs[id].dir = next.dir==SET;
-                digitalWrite(DIR_DRIVE, current_jobs[id].dir ^ DRIVE_INVERT_DIR ? HIGH : LOW); break;
+                digitalWrite(DIR_DRIVE, next.frequency>=0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+                break;
             }
           }
 
@@ -397,7 +394,7 @@ void machine_loop() {
 
           switch(end.ty) {
             case COUNT:
-              if(end.cond > 0 && next.frequency > 0) {
+              if(end.cond > 0 && next.frequency != 0) {
                 current_jobs[id].total = current_jobs[id].remaining = end.cond;
                 current_jobs[id].running = true;
               }
@@ -445,7 +442,7 @@ void machine_loop() {
             *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
             *timers[id].timsk = (1<<1); //enable interrupt of OCRnA
 
-            Period<uint16_t> period = period_from_frequency<uint16_t>(next.frequency, timers[id].prescaling);
+            Period<uint16_t> period = period_from_frequency<uint16_t>(abs(next.frequency), timers[id].prescaling);
 
             *timers[id].ocra = period.period;
             *timers[id].tccrnb |= period.prescale;
@@ -455,19 +452,19 @@ void machine_loop() {
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
-            // Serial.print(next.axis);
-            // Serial.print(" ");
-            // Serial.print(next.frequency);
-            // Serial.print(" ");
-            // Serial.print(period);
-            // Serial.print(" ");
-            // Serial.print(get_timer_period(id));
-            // Serial.print(" ");
-            // Serial.print(*timers[id].tccrnb,BIN);
-            // Serial.print(" ");
-            // Serial.print(end.cond);
-            // Serial.print(" ");
-            // Serial.println(current_jobs[id].remaining);
+            Serial.print(next.axis);
+            Serial.print(" ");
+            Serial.print(next.frequency);
+            Serial.print(" ");
+            Serial.print(period.period);
+            Serial.print(" ");
+            Serial.print(*timers[id].ocra);
+            Serial.print(" ");
+            Serial.print(*timers[id].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.print(end.cond);
+            Serial.print(" ");
+            Serial.println(current_jobs[id].remaining);
           } else {
             current_jobs[id].target_frequency = 0;
             current_jobs[id].frequency = 0;

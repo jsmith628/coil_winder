@@ -73,8 +73,8 @@ Job move_to(byte axis, float x, float s) {
     float d = position_change(axis, x);
 
     if(d==d && d!=0) {
-      j.frequency = (uint16_t) (s * axes[axis].steps_per_unit);
-      j.dir = d<0 ? SET : UNSET;
+      j.frequency = (int16_t) (s * axes[axis].steps_per_unit);
+      j.frequency *= d<0 ? -1 : 1;
 
       j.end.ty = COUNT;
 
@@ -339,8 +339,8 @@ void feed_until_skip(bool do_zero, int8_t axis_dirs[]) {
 
   for(byte i=0; i<NUM_AXES; i++) {
     if(axis_dirs[i]!=0) {
-      next.jobs[i].frequency = (uint16_t) (6.0*axes[i].steps_per_machine_unit);
-      next.jobs[i].dir = axis_dirs[i]<0 ? SET : UNSET;
+      next.jobs[i].frequency = (int16_t) (6.0*axes[i].steps_per_machine_unit);
+      next.jobs[i].frequency *= axis_dirs[i]<0 ? -1 : 1;
       next.jobs[i].end.ty = STALL_GUARD;
       next.jobs[i].end.cond = FEED_SGT;
 

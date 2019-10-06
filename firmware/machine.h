@@ -73,7 +73,7 @@
 #define JOB_QUEUE_SIZE (1<<JOB_QUEUE_ORDER)
 
 #define SUBJOBS_PER_JOB 4
-#define NOOP_JOB {0, KEEP, 0, {IMMEDIATE, 0}, NULL}
+#define NOOP_JOB {0, 0, {IMMEDIATE, 0}, NULL}
 
 #include "queue.h"
 
@@ -93,8 +93,7 @@ enum PinOption: uint8_t { KEEP=0, SET, UNSET };
 
 typedef struct {
   byte axis;
-  PinOption dir;
-  u16 frequency;
+  int16_t frequency;
   EndCondition end;
   void (*callback)(const void*);
   const void * callback_args;
