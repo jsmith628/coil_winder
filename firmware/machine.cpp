@@ -323,7 +323,7 @@ bool job_queue_open() {
 
 bool job_done() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
-    if(current_jobs[i].running) {
+    if(current_jobs[i].running && current_jobs[i].callback==NULL) {
       return false;
     }
   }
@@ -452,19 +452,19 @@ void machine_loop() {
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
-            Serial.print(next.axis);
-            Serial.print(" ");
-            Serial.print(next.frequency);
-            Serial.print(" ");
-            Serial.print(period.period);
-            Serial.print(" ");
-            Serial.print(*timers[id].ocra);
-            Serial.print(" ");
-            Serial.print(*timers[id].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.print(end.cond);
-            Serial.print(" ");
-            Serial.println(current_jobs[id].remaining);
+            // Serial.print(next.axis);
+            // Serial.print(" ");
+            // Serial.print(next.frequency);
+            // Serial.print(" ");
+            // Serial.print(period.period);
+            // Serial.print(" ");
+            // Serial.print(*timers[id].ocra);
+            // Serial.print(" ");
+            // Serial.print(*timers[id].tccrnb,BIN);
+            // Serial.print(" ");
+            // Serial.print(end.cond);
+            // Serial.print(" ");
+            // Serial.println(current_jobs[id].remaining);
           } else {
             current_jobs[id].target_frequency = 0;
             current_jobs[id].frequency = 0;
