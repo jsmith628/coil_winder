@@ -2,149 +2,127 @@
 #include <TMC2130Stepper.h>
 #include "machine.h"
 
-typedef TMC2130Stepper Stepper;
-
-typedef char i8;
-typedef int i16;
-typedef long i32;
-
-typedef byte u8;
-// typedef unsigned int u16;
-typedef unsigned long u32;
-
-Stepper clamp = Stepper(EN_CLAMP, DIR_CLAMP, STEP_CLAMP, CS_CLAMP);
-Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
-
 const uint8_t prescaling_16_bit[6] = {1,3,3,2,2,0};
 const uint8_t prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
 
-#define FREQ_STEP 1
-
-#define LUT_INIT1(f)     (period_from_frequency(f))
-#define LUT_INIT2(f)     LUT_INIT1(f),     LUT_INIT1((f+1*FREQ_STEP))
-#define LUT_INIT4(f)     LUT_INIT2(f),     LUT_INIT2((f+2*FREQ_STEP))
-#define LUT_INIT8(f)     LUT_INIT4(f),     LUT_INIT4((f+4*FREQ_STEP))
-#define LUT_INIT16(f)    LUT_INIT8(f),     LUT_INIT8((f+8*FREQ_STEP))
-#define LUT_INIT32(f)    LUT_INIT16(f),    LUT_INIT16((f+16*FREQ_STEP))
-#define LUT_INIT64(f)    LUT_INIT32(f),    LUT_INIT32((f+32*FREQ_STEP))
-#define LUT_INIT128(f)   LUT_INIT64(f),    LUT_INIT64((f+64*FREQ_STEP))
-#define LUT_INIT256(f)   LUT_INIT128(f),   LUT_INIT128((f+128*FREQ_STEP))
-#define LUT_INIT512(f)   LUT_INIT256(f),   LUT_INIT256((f+256*FREQ_STEP))
-#define LUT_INIT1024(f)  LUT_INIT512(f),   LUT_INIT512((f+512*FREQ_STEP))
-#define LUT_INIT2048(f)  LUT_INIT1024(f),  LUT_INIT1024((f+1024*FREQ_STEP))
-#define LUT_INIT4096(f)  LUT_INIT2048(f),  LUT_INIT2048((f+2048*FREQ_STEP))
-#define LUT_INIT8192(f)  LUT_INIT4096(f),  LUT_INIT4096((f+4096*FREQ_STEP))
-#define LUT_INIT16384(f) LUT_INIT8192(f),  LUT_INIT8192((f+8192*FREQ_STEP))
-
-typedef struct {
-  const uint8_t prescale;
-  const uint16_t period;
-} Period;
-
-constexpr Period period_from_frequency(uint16_t f) {
-  uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) f;
-  uint8_t prescaling = 1;
-
-  while((period & 0xFFFF0000) && prescaling_16_bit[prescaling]!=0) {
-    uint8_t pre_mul = prescaling_16_bit[prescaling];
-
-    if(period & (1<<(pre_mul-1))) {
-      period = (period>>pre_mul) + 1;
-    } else {
-      period = (period>>pre_mul);
-    }
-
-    prescaling++;
-  }
-
-  return {prescaling, (uint16_t) period};
-}
-
-const PROGMEM Period periodsLUT[8192] = { LUT_INIT8192(1) };
-
 //A handy container object for all of the timer registers
-typedef struct {
-    const byte bits;
-    const uint32_t mask;
-    const byte * pre_mul;
-    volatile uint8_t * tccrna;
-    volatile uint8_t * tccrnb;
-    volatile void * tcnt;
-    volatile void * ocra;
-    volatile void * ocrb;
-    volatile uint8_t * timsk;
-} Timer;
+template<typename T>
+struct Timer {
+    const byte * const prescaling;
 
-//all of the 16bit timers on the ATMEGA2560
-Timer timers[4] = {
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR3A, &TCCR3B, &TCNT3, &OCR3A, &OCR3B, &TIMSK3},
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR4A, &TCCR4B, &TCNT4, &OCR4A, &OCR4B, &TIMSK4},
-  {16, 0xFFFF0000, prescaling_16_bit, &TCCR5A, &TCCR5B, &TCNT5, &OCR5A, &OCR5B, &TIMSK5},
-  // {16, 0xFFFF0000, prescaling_16_bit, &TCCR1A, &TCCR1B, &TCNT1, &OCR1A, &OCR3A, &TIMSK1},
-  {8, 0xFFFFFF00, prescaling_timer_2, &TCCR2A, &TCCR2B, &TCNT2, &OCR2A, &OCR2B, &TIMSK2},
-  // {8, 0xFFFFFF00, prescaling_timer_2, &TCCR1A, &TCCR1A, &TCNT1, &OCR1A, &OCR1B, &TIMSK1},
+    volatile T * const tcnt;
+    volatile T * const ocra;
+    volatile T * const ocrb;
+
+    volatile uint8_t * const tccrna;
+    volatile uint8_t * const tccrnb;
+    volatile uint8_t * const timsk;
 };
 
-inline void set_timer_count(byte id, uint16_t val) {
-  if(timers[id].bits==16)
-    *((volatile uint16_t*)timers[id].tcnt) = val;
-  else
-    *((volatile uint8_t*)timers[id].tcnt) = (uint8_t) val;
-}
+//all of the stepper timers
+const Timer<uint16_t> timers[4] = {
+  {prescaling_16_bit, &TCNT3, &OCR3A, &OCR3B, &TCCR3A, &TCCR3B, &TIMSK3},
+  {prescaling_16_bit, &TCNT4, &OCR4A, &OCR4B, &TCCR4A, &TCCR4B, &TIMSK4},
+  {prescaling_16_bit, &TCNT5, &OCR5A, &OCR5B, &TCCR5A, &TCCR5B, &TIMSK5},
+  {prescaling_16_bit, &TCNT1, &OCR1A, &OCR1B, &TCCR1A, &TCCR1B, &TIMSK1}
+};
 
-inline void set_timer_period(byte id, uint16_t val) {
-  if(timers[id].bits==16)
-    *((volatile uint16_t*)timers[id].ocra) = val;
-  else
-    *((volatile uint8_t*)timers[id].ocra) = (uint8_t) val;
-}
+const Timer<uint8_t> accel_timer = {
+  prescaling_timer_2, &OCR2A, &OCR2B, &TIMSK2, &TCCR2A, &TCCR2B, &TCNT2
+};
 
-inline uint16_t get_timer_period(byte id) {
-  if(timers[id].bits==16)
-    return *((volatile uint16_t*)timers[id].ocra);
-  else
-    return *((volatile uint8_t*)timers[id].ocra);
-}
+template<typename T>
+struct Period {
+  const uint8_t prescale;
+  const T period;
+};
 
-uint16_t get_timer_period(byte id, uint16_t freq, byte* pre) {
-  uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) freq;//get the timer period
-  byte prescaling = 1;
+template<typename T>
+constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre) {
 
-  while((period & timers[id].mask)&&(timers[id].pre_mul[prescaling])) {
-    byte pre_mul = timers[id].pre_mul[prescaling];
+  //if the frequency is 0, then the timer prescaler should be 0 to turn off the timer
+  if(f==0) return {0,0};
+
+  //compute the absolute period
+  uint32_t period = (uint32_t) AVR_CLK_FREQ / (uint32_t) f;
+
+  //construct the type mask
+  uint32_t mask = ~0;
+  for(T i=1; i!=0; i<<=1) mask &= (~((uint32_t) i));
+
+  //now, loop through the timer prescale multipliers until the period is in range
+  uint8_t prescaling = 1;
+  while((period & mask) && pre[prescaling]!=0) {
+    uint8_t pre_mul = pre[prescaling];
 
     if(period & (1<<(pre_mul-1))) {
+      //round up
       period = (period>>pre_mul) + 1;
     } else {
+      //round down
       period = (period>>pre_mul);
     }
 
     prescaling++;
   }
 
-  *pre = prescaling;
-  return (uint16_t) period;
+  return {prescaling, (T) period};
 }
 
+#define LUT1(f,step,ty)     (period_from_frequency<ty>(f, prescaling_16_bit))
+#define LUT2(f,step,ty)     LUT1(f,step,ty),     LUT1((f+1*step),step,ty)
+#define LUT4(f,step,ty)     LUT2(f,step,ty),     LUT2((f+2*step),step,ty)
+#define LUT8(f,step,ty)     LUT4(f,step,ty),     LUT4((f+4*step),step,ty)
+#define LUT16(f,step,ty)    LUT8(f,step,ty),     LUT8((f+8*step),step,ty)
+#define LUT32(f,step,ty)    LUT16(f,step,ty),    LUT16((f+16*step),step,ty)
+#define LUT64(f,step,ty)    LUT32(f,step,ty),    LUT32((f+32*step),step,ty)
+#define LUT128(f,step,ty)   LUT64(f,step,ty),    LUT64((f+64*step),step,ty)
+#define LUT256(f,step,ty)   LUT128(f,step,ty),   LUT128((f+128*step),step,ty)
+#define LUT512(f,step,ty)   LUT256(f,step,ty),   LUT256((f+256*step),step,ty)
+#define LUT1024(f,step,ty)  LUT512(f,step,ty),   LUT512((f+512*step),step,ty)
+#define LUT2048(f,step,ty)  LUT1024(f,step,ty),  LUT1024((f+1024*step),step,ty)
+#define LUT4096(f,step,ty)  LUT2048(f,step,ty),  LUT2048((f+2048*step),step,ty)
+#define LUT8192(f,step,ty)  LUT4096(f,step,ty),  LUT4096((f+4096*step),step,ty)
+#define LUT16384(f,step,ty) LUT8192(f,step,ty),  LUT8192((f+8192*step),step,ty)
+
+#define _CAT(x,y) x ## y
+#define LUT_INIT(start, step, size) \
+  const PROGMEM Period<uint16_t> periodsLUT[size] = { \
+    _CAT(LUT, size)(start, step, uint16_t) \
+  };
+
+LUT_INIT(PERIOD_LUT_FREQ_START, (1<<PERIOD_LUT_FREQ_STEP), PERIOD_LUT_SIZE)
+
 struct JobProgress {
+
   volatile bool dir = false;
-  volatile u32 total = 0;
-
   volatile bool running = false;
-  volatile u32 remaining = 0;
+  volatile bool accelerating = false;
+  volatile bool paused = false;
 
-  volatile EndConditionType end;
+  volatile uint32_t total = 0;
+  volatile uint32_t remaining = 0;
+  volatile  int32_t last = 0;
+
+  volatile uint16_t target_frequency = 0;
+  volatile uint16_t frequency = 0;
+  volatile uint16_t max_acceleration = 0;
+  volatile uint16_t start_acceleration = ~0;
+  volatile uint16_t acceleration = 0;
+
+  volatile uint8_t paused_timsk = 0;
+  volatile EndConditionType end = IMMEDIATE;
+
   void (* volatile callback)(const void*) = NULL;
   const void * volatile callback_args = NULL;
+
 } current_jobs[SUBJOBS_PER_JOB];
 
-int32_t steps_taken_last_job[SUBJOBS_PER_JOB] = {0,0,0,0};
-
-int32_t steps_moved(uint8_t axis) {return steps_taken_last_job[axis];}
+int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
-  steps_taken_last_job[id] = \
+  current_jobs[id].last = \
     (current_jobs[id].dir ? -1 : 1) * \
     ((int32_t) current_jobs[id].total - (int32_t) current_jobs[id].remaining); \
   *timers[id].tccrnb = 0; \
@@ -171,6 +149,22 @@ int32_t steps_moved(uint8_t axis) {return steps_taken_last_job[axis];}
 
 #define DO_STEP_NOOP()
 
+inline bool stepper_dedge(uint8_t id) {
+  switch(id) {
+    #ifndef FEED_DEDGE
+      case 0: return true;
+    #endif
+    #ifndef CLAMP_DEDGE
+      case 1: return true;
+    #endif
+    #ifndef DRIVE_DEDGE
+      case 2: return true;
+    #endif
+  }
+  return false;
+}
+
+
 //to be run in the ISRs
 #define DO_JOB(id, step) { \
   step(); \
@@ -180,18 +174,19 @@ int32_t steps_moved(uint8_t axis) {return steps_taken_last_job[axis];}
 
 
 #define TRIGGER_SG(id, pin) { \
-  STOP_JOB(id); \
-  detachInterrupt(digitalPinToInterrupt(pin)); \
+  if(!current_jobs[id].paused){ \
+    STOP_JOB(id); \
+    detachInterrupt(digitalPinToInterrupt(pin)); \
+  } \
 }
 
 void sg_0(void) {TRIGGER_SG(0, SG_FEED)}
 void sg_1(void) {TRIGGER_SG(1, SG_CLAMP)}
 
-ISR(TIMER2_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
-// ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
 ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
 ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
+ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 
 #define DIRECT_REGISTER(port) (((uint8_t) port) <= 0x1F)
 
@@ -207,35 +202,73 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
   ISR(TIMER5_COMPB_vect, ISR_NAKED) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); reti(); }
 #endif
 
-bool paused = false;
-uint8_t paused_timsks[4] = {0,0,0,0};
+void set_max_acceleration(uint8_t axis, uint16_t accel) {
+  if(axis < SUBJOBS_PER_JOB) current_jobs[axis].max_acceleration = accel;
+}
+
+void set_start_acceleration(uint8_t axis, uint16_t speed) {
+  if(axis < SUBJOBS_PER_JOB)
+    current_jobs[axis].start_acceleration = max(PERIOD_LUT_FREQ_START, speed);
+}
+
+ISR(TIMER2_COMPA_vect) {
+  bool done = true;
+
+  for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
+    if(current_jobs[i].accelerating) {
+      uint16_t target = current_jobs[i].target_frequency;
+      uint16_t f = current_jobs[i].frequency;
+
+      uint8_t sign = target - f > 0 ? 1 : -1;
+      if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
+      uint8_t sign2 = target - f > 0 ? 1 : -1;
+
+      if(sign != sign2) {
+        f = target;
+        current_jobs[i].accelerating = false;
+      } else {
+        done = false;
+      }
+
+      current_jobs[i].frequency = f;
+      *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111)) | pgm_read_byte_near(&periodsLUT[f].prescale);
+      *timers[i].ocra = pgm_read_word_near(&periodsLUT[f >> PERIOD_LUT_FREQ_STEP].period);
+
+    }
+  }
+
+  if(done) {
+    *accel_timer.tccrnb = 0; \
+    *accel_timer.timsk = 0; \
+  }
+}
 
 void pause_jobs(){
-  //TODO: manage the stallguard interrupt
   cli();
-  paused = true;
   for(byte i=0; i<4; i++) {
-    paused_timsks[i] = *timers[i].timsk;
-    *timers[i].timsk = 0;
+    if(!current_jobs[i].paused) {
+      current_jobs[i].paused = true;
+      current_jobs[i].paused_timsk = *timers[i].timsk;
+      current_jobs[i].frequency = current_jobs[i].start_acceleration;
+      *timers[i].timsk = 0;
+    }
   }
   sei();
 }
 
 void resume_jobs(){
-  //TODO: manage the stallguard interrupt
   cli();
-  for(byte i=0; i<4; i++) { *timers[i].timsk = paused_timsks[i]; }
-  paused = false;
+  for(byte i=0; i<4; i++) {
+    if(!current_jobs[i].paused) {
+      current_jobs[i].paused = false;
+      *timers[i].timsk = current_jobs[i].paused_timsk;
+    }
+  }
   sei();
 }
 
-
-
 Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
 Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
-
-int32_t drive_freq = 0;
-bool drive_dir = false;
 
 void clear_job_queue() {
   job_queue.clear();
@@ -257,14 +290,6 @@ inline bool idempotent(Job j) {
 }
 
 bool queue_jobs(Jobs j) {
-  for(uint16_t i=0; i<8192; i++) {
-    Serial.print("f=");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(pgm_read_byte_near(&(periodsLUT[i].prescale)), BIN);
-    Serial.print(" ");
-    Serial.println(pgm_read_word_near(&(periodsLUT[i].period)));
-  }
 
   byte count = 0;
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
@@ -297,7 +322,21 @@ bool job_done() {
   return true;
 }
 
-bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || job_done();}
+bool paused() {
+  for(byte i=0; i<SUBJOBS_PER_JOB; i++){
+    if(current_jobs[i].paused) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || !job_done();}
+
+typedef TMC2130Stepper Stepper;
+
+Stepper clamp = Stepper(EN_CLAMP, DIR_CLAMP, STEP_CLAMP, CS_CLAMP);
+Stepper feed = Stepper(EN_FEED, DIR_FEED, STEP_FEED, CS_FEED);
 
 void machine_loop() {
 
@@ -315,7 +354,7 @@ void machine_loop() {
   if(job_done()) {
 
     //enact the next job if there is one
-    if(!paused && job_size_queue.count()>0){
+    if(!paused() && job_size_queue.count()>0){
       byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens
@@ -388,7 +427,7 @@ void machine_loop() {
           //setup the timers
 
           //clear the timer value
-          set_timer_count(id,0);
+          *timers[id].tcnt = 0;
 
           //clear the config
           //note we don't need prescaling because we wont really need events triggering
@@ -396,31 +435,20 @@ void machine_loop() {
           *timers[id].tccrna = 0;
 
           if(current_jobs[id].running) {
+
+            current_jobs[id].target_frequency = next.frequency;
+            current_jobs[id].frequency = next.frequency;
+
             *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
             *timers[id].timsk = (1<<1); //enable interrupt of OCRnA
 
-            byte prescaling = 1;
-            uint16_t period = get_timer_period(id, next.frequency, &prescaling);
-            set_timer_period(id,period);
+            Period<uint16_t> period = period_from_frequency<uint16_t>(next.frequency, timers[id].prescaling);
 
-            *timers[id].tccrnb |= prescaling;
+            *timers[id].ocra = period.period;
+            *timers[id].tccrnb |= period.prescale;
 
-            bool set_ocrb;
-            switch(id) {
-              #ifndef FEED_DEDGE
-                case 0: set_ocrb = true; break;
-              #endif
-              #ifndef CLAMP_DEDGE
-                case 1: set_ocrb = true; break;
-              #endif
-              #ifndef DRIVE_DEDGE
-                case 2: set_ocrb = true; break;
-              #endif
-              default: set_ocrb = false; break;
-            }
-
-            if(set_ocrb) {
-              *((volatile uint16_t*) timers[id].ocrb) = period>>1;
+            if(stepper_dedge(id)) {
+              *timers[id].ocrb = period.period>>1;
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
@@ -438,17 +466,26 @@ void machine_loop() {
             // Serial.print(" ");
             // Serial.println(current_jobs[id].remaining);
           } else {
+            current_jobs[id].target_frequency = 0;
+            current_jobs[id].frequency = 0;
+
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0;
             *timers[id].timsk = 0;
-            set_timer_period(id,0);
+            *timers[id].ocra = 0;
+            *timers[id].ocrb = 0;
           }
 
         }
 
+        // uint16_t start_frequencies
+        //
+        // for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
+        //
+        // }
+
+
       sei();
-    } else {
-      drive_freq = 0;
     }
   }
 

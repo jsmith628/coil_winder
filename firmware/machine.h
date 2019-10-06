@@ -49,11 +49,15 @@
 #define DRIVE_STEPS_PER_TURN 200
 #define DRIVE_MAX_BASE_SPEED 20
 #define DRIVE_MAX_ACCEL 2
-#define DRIVE_ACCEL_RESOLUTION 0.5
 
 #define ROD_MM_PER_TURN 8
+
 #define AVR_CLK_FREQ 16000000
-#define AVR_TIMER_MAX 0xFFFF
+#define ACCEL_TIME_RESOLUTION 0.1
+
+#define PERIOD_LUT_FREQ_START 0 //must be an integer
+#define PERIOD_LUT_FREQ_STEP 0 //must be an power of two no bigger than 16
+#define PERIOD_LUT_SIZE 8192 //must be a power of two no bigger than 8192
 
 #define GEAR_1_TEETH 20
 #define GEAR_2_TEETH 8
@@ -72,10 +76,6 @@
 #define NOOP_JOB {0, KEEP, KEEP, 0, {IMMEDIATE, 0}, NULL}
 
 #include "queue.h"
-
-void step_clamp();
-void step_feed();
-void step_drive();
 
 enum EndConditionType: uint8_t {
   IMMEDIATE = 0,
@@ -112,6 +112,9 @@ bool queue_jobs(Jobs j);
 void clear_job_queue();
 void clear_jobs();
 bool job_queue_open();
+
+void set_max_acceleration(uint8_t axis, uint16_t accel);
+void set_start_acceleration(uint8_t axis, uint16_t speed);
 
 bool busy();
 
