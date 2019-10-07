@@ -98,13 +98,13 @@ void m121();
 void m125(float a, float b, float w);
 
 //Set max acceleration
-void m201(float s);
+void m201(float w);
 
 //Set max feedrate (Feedrate)
 void m203(float f);
 
 //Set starting acceleration
-void m204(float a, float b, float w);
+void m204(float w);
 
 //Save settings to EEPROM
 void m500();

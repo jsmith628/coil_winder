@@ -48,12 +48,12 @@
 #define DRIVE_MS 1
 #define DRIVE_STEPS_PER_TURN 200
 #define DRIVE_MAX_BASE_SPEED 20
-#define DRIVE_MAX_ACCEL 2
+#define DRIVE_MAX_ACCELERATION 2
 
 #define ROD_MM_PER_TURN 8
 
 #define AVR_CLK_FREQ 16000000
-#define ACCEL_TIME_RESOLUTION 0.1
+#define ACCEL_TIME_RESOLUTION 0.01
 
 #define PERIOD_LUT_FREQ_START 0 //must be an integer
 #define PERIOD_LUT_FREQ_STEP 0 //must be an power of two no bigger than 16
@@ -69,7 +69,7 @@
 #define FEED_STEP_RANGE (int32_t) (FEED_RANGE * FEED_STEPS_PER_MM)
 #define CLAMP_STEP_RANGE (int32_t) (CLAMP_RANGE * CLAMP_STEPS_PER_MM)
 
-#define JOB_QUEUE_ORDER 4
+#define JOB_QUEUE_ORDER 5
 #define JOB_QUEUE_SIZE (1<<JOB_QUEUE_ORDER)
 
 #define SUBJOBS_PER_JOB 4
@@ -114,8 +114,8 @@ void clear_job_queue();
 void clear_jobs();
 bool job_queue_open();
 
-void set_max_acceleration(uint8_t axis, uint16_t accel);
-void set_start_acceleration(uint8_t axis, uint16_t speed);
+void set_max_acceleration(uint16_t accel);
+void set_start_acceleration(uint16_t speed);
 
 bool busy();
 

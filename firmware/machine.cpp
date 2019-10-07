@@ -2,6 +2,8 @@
 #include <TMC2130Stepper.h>
 #include "machine.h"
 
+#define signum(x) ((x)<0 ? -1 : (x)==0 ? 0 : 1)
+
 const uint8_t prescaling_16_bit[6] = {1,3,3,2,2,0};
 const uint8_t prescaling_timer_2[8] = {1,3,2,1,1,1,2,0};
 
@@ -28,7 +30,7 @@ const Timer<uint16_t> timers[4] = {
 };
 
 const Timer<uint8_t> accel_timer = {
-  prescaling_timer_2, &OCR2A, &OCR2B, &TIMSK2, &TCCR2A, &TCCR2B, &TCNT2
+  prescaling_timer_2, &TCNT2, &OCR2A, &OCR2B, &TCCR2A, &TCCR2B, &TIMSK2
 };
 
 template<typename T>
@@ -103,11 +105,9 @@ struct JobProgress {
   volatile uint32_t remaining = 0;
   volatile  int32_t last = 0;
 
-  volatile int16_t target_frequency = 0;
-  volatile int16_t frequency = 0;
-  volatile uint16_t max_acceleration = 0;
-  volatile uint16_t start_acceleration = ~0;
-  volatile uint16_t acceleration = 0;
+  volatile float target_frequency = 0;
+  volatile float frequency = 0;
+  volatile float acceleration = 0;
 
   volatile uint8_t paused_timsk = 0;
   volatile EndConditionType end = IMMEDIATE;
@@ -117,12 +117,15 @@ struct JobProgress {
 
 } current_jobs[SUBJOBS_PER_JOB];
 
+volatile float max_acceleration = 0;
+volatile uint16_t start_acceleration = 0x7FFF;
+
 int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
   current_jobs[id].last = \
-    (current_jobs[id].frequency<0 ? -1 : 1) * \
+    (current_jobs[id].frequency < 0 ? -1 : 1) * \
     ((int32_t) current_jobs[id].total - (int32_t) current_jobs[id].remaining); \
   *timers[id].tccrnb = 0; \
   *timers[id].timsk = 0; \
@@ -212,13 +215,12 @@ void set_enable(uint8_t axis, bool set) {
 void enable_stepper(uint8_t axis) { set_enable(axis, true); }
 void disable_stepper(uint8_t axis) { set_enable(axis, false); }
 
-void set_max_acceleration(uint8_t axis, uint16_t accel) {
-  if(axis < SUBJOBS_PER_JOB) current_jobs[axis].max_acceleration = accel;
+void set_max_acceleration(uint16_t accel) {
+  max_acceleration = ACCEL_TIME_RESOLUTION * (float) accel;
 }
 
-void set_start_acceleration(uint8_t axis, uint16_t speed) {
-  if(axis < SUBJOBS_PER_JOB)
-    current_jobs[axis].start_acceleration = max(PERIOD_LUT_FREQ_START, speed);
+void set_start_acceleration(uint16_t speed) {
+  start_acceleration = max(PERIOD_LUT_FREQ_START, speed);
 }
 
 ISR(TIMER2_COMPA_vect) {
@@ -226,24 +228,28 @@ ISR(TIMER2_COMPA_vect) {
 
   for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
     if(current_jobs[i].accelerating) {
-      uint16_t target = current_jobs[i].target_frequency;
-      uint16_t f = current_jobs[i].frequency;
+      float target = current_jobs[i].target_frequency;
+      float f = current_jobs[i].frequency;
 
-      uint8_t sign = target - f > 0 ? 1 : -1;
+      float sign = signum(target - f);
       if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
-      uint8_t sign2 = target - f > 0 ? 1 : -1;
 
-      if(sign != sign2) {
+      if(sign != signum(target - f)) {
         f = target;
         current_jobs[i].accelerating = false;
       } else {
         done = false;
       }
 
+      uint16_t index = (uint16_t) abs(f) >> PERIOD_LUT_FREQ_STEP;
       current_jobs[i].frequency = f;
-      *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111)) | pgm_read_byte_near(&periodsLUT[f].prescale);
-      *timers[i].ocra = pgm_read_word_near(&periodsLUT[(uint16_t) abs(f) >> PERIOD_LUT_FREQ_STEP].period);
+      *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111));
 
+      *timers[i].tccrnb |= pgm_read_byte_near(&periodsLUT[index].prescale);
+      *timers[i].ocra = pgm_read_word_near(&periodsLUT[index].period);
+      if(stepper_dedge(i)) {
+        *timers[i].ocrb =  *timers[i].ocra >> 1;
+      }
     }
   }
 
@@ -259,7 +265,6 @@ void pause_jobs(){
     if(!current_jobs[i].paused) {
       current_jobs[i].paused = true;
       current_jobs[i].paused_timsk = *timers[i].timsk;
-      current_jobs[i].frequency = current_jobs[i].start_acceleration;
       *timers[i].timsk = 0;
     }
   }
@@ -359,10 +364,10 @@ void machine_loop() {
   // }
 
   //if the last command ended, advance the queue
-  if(job_done()) {
+  if(job_done() && !paused()) {
 
     //enact the next job if there is one
-    if(!paused() && job_size_queue.count()>0){
+    if(job_size_queue.count()>0){
       byte count = job_size_queue.pop_top();
 
       cli(); //make sure no random interrupt bs happens
@@ -375,13 +380,13 @@ void machine_loop() {
           if(next.frequency!=0) {
             switch(id) {
               case 0:
-                digitalWrite(DIR_FEED, next.frequency>=0 ^ FEED_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_FEED, next.frequency<0 ^ FEED_INVERT_DIR ? HIGH : LOW);
                 break;
               case 1:
-                digitalWrite(DIR_CLAMP, next.frequency>=0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_CLAMP, next.frequency<0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
                 break;
               case 2:
-                digitalWrite(DIR_DRIVE, next.frequency>=0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_DRIVE, next.frequency<0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
                 break;
             }
           }
@@ -397,6 +402,9 @@ void machine_loop() {
               if(end.cond > 0 && next.frequency != 0) {
                 current_jobs[id].total = current_jobs[id].remaining = end.cond;
                 current_jobs[id].running = true;
+                Serial.print(end.cond);
+                Serial.print(" ");
+                Serial.println(id);
               }
               break;
             case STALL_GUARD:
@@ -424,25 +432,98 @@ void machine_loop() {
           current_jobs[id].callback = next.callback;
           current_jobs[id].callback_args = next.callback_args;
 
-          //setup the timers
+          //set the target speed
+          if(current_jobs[id].running) {
+            current_jobs[id].target_frequency = (float) next.frequency;
+          } else {
+            current_jobs[id].target_frequency = 0;
+            current_jobs[id].frequency = 0;
+          }
 
+        }
+
+        const uint8_t drive_axis = 2;
+
+        float sign = signum(current_jobs[drive_axis].frequency);
+        sign = sign==0 ? 1 : sign;
+        float mag = abs(current_jobs[drive_axis].frequency);
+        float tar_sign = signum(current_jobs[drive_axis].target_frequency);
+        tar_sign = tar_sign==0 ? 1 : tar_sign;
+        float tar_mag = abs(current_jobs[drive_axis].target_frequency);
+        float start_accel = (float) start_acceleration;
+
+        float f_start[SUBJOBS_PER_JOB];
+        if((sign != tar_sign) || (mag <= start_accel) || (tar_mag <= start_accel)) {
+          f_start[drive_axis] = (tar_sign * min(tar_mag, start_accel));
+        } else {
+          f_start[drive_axis] = current_jobs[drive_axis].frequency;
+        }
+
+        float dt = (current_jobs[drive_axis].target_frequency - (float) f_start[drive_axis]);
+        dt /= max_acceleration;
+        dt = abs(dt);
+
+        //next rescale the start frequencies to be in the same proportion as
+        //the targets
+        for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++){
+          if(i!=drive_axis && current_jobs[i].running) {
+            if(dt!=0 && dt==dt) {
+              float factor = current_jobs[i].target_frequency / current_jobs[drive_axis].target_frequency;
+              f_start[i] = (factor * (float) f_start[drive_axis]);
+            } else {
+              f_start[i] = current_jobs[i].target_frequency;
+            }
+          }
+        }
+
+        //setup the acceleration timer
+
+        const uint16_t accel_freq = (uint16_t) (1.0 / ACCEL_TIME_RESOLUTION);
+        Period<uint8_t> accel_period = period_from_frequency<uint8_t>(
+          accel_freq, accel_timer.prescaling
+        );
+
+        *accel_timer.tcnt = 0;
+        *accel_timer.tccrna = 0;
+        *accel_timer.tccrnb = _BV(WGM12) | accel_period.prescale;
+        *accel_timer.ocra = accel_period.period;
+        *accel_timer.timsk = (1<<1);
+
+        // Serial.print(" ");
+        // Serial.print(accel_freq);
+        // Serial.print(" ");
+        // Serial.print(accel_period.period);
+        // Serial.print(" ");
+        // Serial.print(*accel_timer.ocra);
+        // Serial.print(" ");
+        // Serial.println(*accel_timer.tccrnb,BIN);
+
+        //finally, actually set the timers
+        for(uint8_t id=0; id<SUBJOBS_PER_JOB; id++){
           //clear the timer value
           *timers[id].tcnt = 0;
 
           //clear the config
-          //note we don't need prescaling because we wont really need events triggering
-          //more than once a second
           *timers[id].tccrna = 0;
 
           if(current_jobs[id].running) {
 
-            current_jobs[id].target_frequency = next.frequency;
-            current_jobs[id].frequency = next.frequency;
+            current_jobs[id].frequency = f_start[id];
+
+            if(dt!=dt || dt==0) {
+              current_jobs[id].acceleration = 0;
+              current_jobs[id].accelerating = false;
+            } else {
+              current_jobs[id].acceleration =
+                (current_jobs[id].target_frequency - f_start[id]) / dt;
+              current_jobs[id].accelerating = true;
+            }
 
             *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
             *timers[id].timsk = (1<<1); //enable interrupt of OCRnA
 
-            Period<uint16_t> period = period_from_frequency<uint16_t>(abs(next.frequency), timers[id].prescaling);
+            Period<uint16_t> period =
+              period_from_frequency<uint16_t>((uint16_t) abs(f_start[id]), timers[id].prescaling);
 
             *timers[id].ocra = period.period;
             *timers[id].tccrnb |= period.prescale;
@@ -452,39 +533,35 @@ void machine_loop() {
               *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
             }
 
-            // Serial.print(next.axis);
-            // Serial.print(" ");
-            // Serial.print(next.frequency);
-            // Serial.print(" ");
-            // Serial.print(period.period);
-            // Serial.print(" ");
-            // Serial.print(*timers[id].ocra);
-            // Serial.print(" ");
-            // Serial.print(*timers[id].tccrnb,BIN);
-            // Serial.print(" ");
-            // Serial.print(end.cond);
-            // Serial.print(" ");
-            // Serial.println(current_jobs[id].remaining);
+            Serial.print(id);
+            Serial.print(" ");
+            Serial.print(f_start[id]);
+            Serial.print(" ");
+            Serial.print(current_jobs[id].acceleration);
+            Serial.print(" ");
+            Serial.print(current_jobs[id].target_frequency);
+            Serial.print(" ");
+            Serial.print(period.period);
+            Serial.print(" ");
+            Serial.print(*timers[id].ocra);
+            Serial.print(" ");
+            Serial.print(*timers[id].tccrnb,BIN);
+            Serial.print(" ");
+            Serial.println(current_jobs[id].remaining);
           } else {
-            current_jobs[id].target_frequency = 0;
-            current_jobs[id].frequency = 0;
-
             //disable the timer interrupt and clear the compare value
             *timers[id].tccrnb = 0;
             *timers[id].timsk = 0;
             *timers[id].ocra = 0;
             *timers[id].ocrb = 0;
           }
-
         }
 
-        // uint16_t start_frequencies
-        //
-        // for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
-        //
-        // }
-
-
+      sei();
+    } else {
+      cli();
+        for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++)
+          current_jobs[i].frequency = 0.0;
       sei();
     }
   }

@@ -139,13 +139,13 @@ void interpret_gcode(command c){
         m125(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
       case 201:
-        m201(c.modifiers[S].f);
+        m201(c.modifiers[W].f);
         break;
       case 203:
         m203(c.modifiers[FR].f);
         break;
       case 204:
-        m204(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
+        m204(c.modifiers[W].f);
         break;
       case 500:
         m500();
@@ -256,6 +256,7 @@ bool read_command(){
   if(command_available(BUFFERLENGTH)){
     if(queue_open()) {
       size_t len = next_command(buffer, BUFFERLENGTH);
+      Serial.println(buffer);
       parse(len, buffer);
     }
   }

@@ -240,7 +240,6 @@ void resume() {
 //run when receiving an NAK
 void neg_acknowledge() {}
 
-
 //G codes define movement and interpretation commands
 
 //Rapid move (A axis position, B axis position, Spindle rotations, Speed, Feedrate)
@@ -601,8 +600,23 @@ void m121() {
 //Park (A axis position, B axis postion)
 void m125(float a, float b, float w) {}
 
+void set_max_acceleration(const void*accel) { set_max_acceleration((uint16_t) accel); }
+void set_start_acceleration(const void*start) { set_start_acceleration((uint16_t) start); }
+
 //Set max acceleration
-void m201(float s) {}
+void m201(float w) {
+  if(w==w) {
+    w = min(abs(w), DRIVE_MAX_ACCELERATION);
+
+    Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+    next.jobs[W_AXIS].callback = set_max_acceleration;
+    next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
+    queue_jobs(next);
+
+    Serial.print("Max acceleration set to ");
+    Serial.println(w);
+  }
+}
 
 //Set max feedrate (Feedrate)
 void m203(float f) {
@@ -612,7 +626,19 @@ void m203(float f) {
 }
 
 //Set starting acceleration (A axis acceleration, B axis acceleration, Spindle acceleration)
-void m204(float a, float b, float w) {}
+void m204(float w) {
+  if(w==w) {
+    w = min(abs(w), DRIVE_MAX_BASE_SPEED);
+
+    Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+    next.jobs[W_AXIS].callback = set_start_acceleration;
+    next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
+    queue_jobs(next);
+
+    Serial.print("Start acceleration set to ");
+    Serial.println(w);
+  }
+}
 
 //Save settings to EEPROM
 void m500() {}
