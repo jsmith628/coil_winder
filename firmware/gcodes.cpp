@@ -14,8 +14,6 @@
 
 //STATE
 
-enum {FEEDRATE_TIME,FEEDRATE_DIST} feed_mode = FEEDRATE_DIST;
-
 enum CoordinateSystem: uint8_t {
   MACHINE=0, LOCAL=1, INCREMENTAL=0xFF
 };
@@ -162,6 +160,8 @@ inline float drive_speed(float da, float w, float s, float travel) {
   }
 }
 
+//common callback
+
 void queue_callback(void (*callback)(const void*), const void * callback_args) {
   Job j = NOOP_JOB;
   j.callback = callback;
@@ -192,10 +192,7 @@ bool queue_open() {
 }
 
 //cancels the last command put into the queue (assuming it hasn't started yet)
-void cancel() {
-  Serial.println("Canceling last command");
-  // cancel_last_job();
-}
+void cancel() {}
 
 //clears queue and sends INTERRUPT code once current command is complete
 void interrupt() {
@@ -448,12 +445,6 @@ void g92(float a, float b, float w){
 
   Serial.println();
 }
-
-//Feedrate per minute
-void g94() {feed_mode = FEEDRATE_TIME;}
-
-//Feedrate per revolution
-void g95() {feed_mode = FEEDRATE_DIST;}
 
 //M codes define miscellaneous commands
 

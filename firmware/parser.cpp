@@ -76,12 +76,6 @@ void interpret_gcode(command c){
       case 92:
         g92(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
         break;
-      case 94:
-        g94();
-        break;
-      case 95:
-        g95();
-        break;
     }
   }else if(c.type == 'M'){
     switch (c.number) {
