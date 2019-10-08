@@ -13,7 +13,7 @@
 #define P 5
 
 command com;
-char buffer[BUFFERLENGTH+1];
+char buffer[BUFFERLENGTH];
 
 void display_warning(const char * type){
   Serial.print("Warning: ");
@@ -256,7 +256,6 @@ bool read_command(){
   if(command_available(BUFFERLENGTH)){
     if(queue_open()) {
       size_t len = next_command(buffer, BUFFERLENGTH);
-      Serial.println(buffer);
       parse(len, buffer);
     }
   }
