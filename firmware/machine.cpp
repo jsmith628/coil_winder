@@ -117,8 +117,8 @@ struct JobProgress {
 
 } current_jobs[SUBJOBS_PER_JOB];
 
-volatile float max_acceleration = 0;
-volatile uint16_t start_acceleration = 0x7FFF;
+volatile float max_acceleration = DEFAULT_MAX_ACCELERATION * DRIVE_STEPS_PER_REV * ACCEL_TIME_RESOLUTION;
+volatile uint16_t start_acceleration = DEFAULT_BASE_SPEED * DRIVE_STEPS_PER_REV;
 
 int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
@@ -220,7 +220,7 @@ void set_max_acceleration(uint16_t accel) {
 }
 
 void set_start_acceleration(uint16_t speed) {
-  start_acceleration = max(PERIOD_LUT_FREQ_START, speed);
+  start_acceleration = (float) speed;
 }
 
 inline void set_frequency(uint8_t i, float freq) {
@@ -529,13 +529,13 @@ void machine_loop() {
           if(f_start[id]!=0) {
             switch(id) {
               case 0:
-                digitalWrite(DIR_FEED, f_start[id].frequency<0 ^ FEED_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_FEED, f_start[id]<0 ^ FEED_INVERT_DIR ? HIGH : LOW);
                 break;
               case 1:
-                digitalWrite(DIR_CLAMP, f_start[id].frequency<0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_CLAMP, f_start[id]<0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
                 break;
               case 2:
-                digitalWrite(DIR_DRIVE, f_start[id].frequency<0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+                digitalWrite(DIR_DRIVE, f_start[id]<0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
                 break;
             }
           }

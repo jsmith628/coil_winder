@@ -112,7 +112,7 @@ void m500();
 //Load settings from EEPROM
 void m501();
 
-//Read out settings from EEPROM
+//Read out settings
 void m503();
 
 #endif

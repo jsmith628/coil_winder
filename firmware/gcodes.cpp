@@ -49,9 +49,13 @@ Axis axes[NUM_AXES] = {
   {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0,false, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
 };
 
-bool endstops_enabled = true;
-float max_feedrate = DEFAULT_MAX_FEEDRATE;
-float max_spindle_speed = DEFAULT_MAX_SPINDLE_SPEED;
+struct Settings {
+  bool endstops_enabled = true;
+  float max_feedrate = DEFAULT_MAX_FEEDRATE;
+  float max_spindle_speed = DEFAULT_MAX_SPINDLE_SPEED;
+  float start_acceleration = DEFAULT_BASE_SPEED;
+  float max_acceleration = DEFAULT_MAX_ACCELERATION;
+} settings;
 
 inline float pos_from_steps(byte axis, int32_t new_pos) {
   if(axes[axis].coords==LOCAL) {
@@ -79,7 +83,8 @@ Job move_to(byte axis, float x, float s) {
       j.end.ty = COUNT;
 
       int32_t new_pos = axes[axis].machine_pos + (int32_t) (d*axes[axis].steps_per_unit);
-      if(endstops_enabled) new_pos = min(max(new_pos,axes[axis].min_pos), axes[axis].max_pos);
+      if(settings.endstops_enabled)
+        new_pos = min(max(new_pos,axes[axis].min_pos), axes[axis].max_pos);
 
       // Serial.print(axes[axis].min_pos);
       // Serial.print(" ");
@@ -145,9 +150,9 @@ inline float next_feedrate(float f) {
   if(f==f) {
     f = abs(f);
     last_feedrate = f;
-    return min(f,max_feedrate);
+    return min(f,settings.max_feedrate);
   } else {
-    return min(last_feedrate,max_feedrate);
+    return min(last_feedrate,settings.max_feedrate);
   }
 }
 
@@ -156,7 +161,7 @@ inline float drive_speed(float da, float w, float s, float travel) {
     float dw = position_change(W_AXIS, w);
     return abs(dw / (da / travel));
   } else if(s==s) {
-    return min(abs(s),max_spindle_speed);
+    return min(abs(s),settings.max_spindle_speed);
   } else {
     return DEFAULT_SPINDLE_SPEED;
   }
@@ -249,9 +254,9 @@ void g0 (float a, float b, float w, float s, float f) {
   float drive = drive_speed(position_change(A_AXIS,a),w,s,travel);
 
   //clamp down the speeds if the drive exceeds the max and is determined by feedrate
-  if(s!=s && drive==drive && drive>max_spindle_speed) {
-      float factor = max_spindle_speed / drive;
-      drive = max_spindle_speed;
+  if(s!=s && drive==drive && drive>settings.max_spindle_speed) {
+      float factor = settings.max_spindle_speed / drive;
+      drive = settings.max_spindle_speed;
       travel *= factor;
   }
 
@@ -285,9 +290,9 @@ void g1 (float a, float b, float w, float s, float f) {
   float drive = drive_speed(da,w,w_speed,a_speed);
 
   //clamp down the speeds if the drive exceeds the max and is determined by feedrate
-  if(s!=s && drive==drive && drive>max_spindle_speed) {
-      float factor = max_spindle_speed / drive;
-      drive = max_spindle_speed;
+  if(s!=s && drive==drive && drive>settings.max_spindle_speed) {
+      float factor = settings.max_spindle_speed / drive;
+      drive = settings.max_spindle_speed;
       a_speed *= factor;
       b_speed *= factor;
   }
@@ -384,9 +389,9 @@ void g31 (int8_t a, int8_t b) {
 
 //Define maximum spindle Speed (Speed)
 void g50 (float s) {
-    max_spindle_speed = s==s ? s : DEFAULT_MAX_SPINDLE_SPEED;
+    settings.max_spindle_speed = s==s ? s : DEFAULT_MAX_SPINDLE_SPEED;
     Serial.print("Set maximum spindle speed to ");
-    Serial.println(max_spindle_speed);
+    Serial.println(settings.max_spindle_speed);
 }
 
 //Local coordinates, defines program zero to a new location (A position 0, B position 0, W position 0)
@@ -587,13 +592,13 @@ void m114(bool a, bool b, bool w) {
 
 //Enable software endstops
 void m120() {
-  endstops_enabled = true;
+  settings.endstops_enabled = true;
   Serial.println("Endstops Enabled");
 }
 
 //Disable software endstops
 void m121() {
-  endstops_enabled = false;
+  settings.endstops_enabled = false;
   Serial.println("Endstops Disabled");
 }
 
@@ -605,39 +610,37 @@ void set_start_acceleration(const void*start) { set_start_acceleration((uint16_t
 
 //Set max acceleration
 void m201(float w) {
-  if(w==w) {
-    w = min(abs(w), DRIVE_MAX_ACCELERATION);
+  w = w==w ? abs(w) : DEFAULT_MAX_ACCELERATION;
+  settings.max_acceleration = w;
 
-    Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
-    next.jobs[W_AXIS].callback = set_max_acceleration;
-    next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
-    queue_jobs(next);
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  next.jobs[W_AXIS].callback = set_max_acceleration;
+  next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
+  queue_jobs(next);
 
-    Serial.print("Max acceleration set to ");
-    Serial.println(w);
-  }
+  Serial.print("Max acceleration set to ");
+  Serial.println(w);
 }
 
 //Set max feedrate (Feedrate)
 void m203(float f) {
-    max_feedrate = f==f ? f : DEFAULT_MAX_FEEDRATE;
+    settings.max_feedrate = f==f ? f : DEFAULT_MAX_FEEDRATE;
     Serial.print("Set maximum feedrate to ");
-    Serial.println(max_feedrate);
+    Serial.println(settings.max_feedrate);
 }
 
 //Set starting acceleration (A axis acceleration, B axis acceleration, Spindle acceleration)
 void m204(float w) {
-  if(w==w) {
-    w = min(abs(w), DRIVE_MAX_BASE_SPEED);
+  w = w==w ? abs(w) : DEFAULT_BASE_SPEED;
+  settings.start_acceleration = w;
 
-    Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
-    next.jobs[W_AXIS].callback = set_start_acceleration;
-    next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
-    queue_jobs(next);
+  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  next.jobs[W_AXIS].callback = set_start_acceleration;
+  next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
+  queue_jobs(next);
 
-    Serial.print("Start acceleration set to ");
-    Serial.println(w);
-  }
+  Serial.print("Start acceleration set to ");
+  Serial.println(w);
 }
 
 //Save settings to EEPROM
@@ -646,5 +649,5 @@ void m500() {}
 //Load settings from EEPROM
 void m501() {}
 
-//Read out settings from EEPROM
+//Read out settings
 void m503() {}
