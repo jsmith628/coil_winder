@@ -112,6 +112,9 @@ void m500();
 //Load settings from EEPROM
 void m501();
 
+//Factory reset settings
+void m502();
+
 //Read out settings
 void m503();
 

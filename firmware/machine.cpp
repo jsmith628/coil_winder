@@ -118,7 +118,7 @@ struct JobProgress {
 } current_jobs[SUBJOBS_PER_JOB];
 
 volatile float max_acceleration = DEFAULT_MAX_ACCELERATION * DRIVE_STEPS_PER_REV * ACCEL_TIME_RESOLUTION;
-volatile uint16_t start_acceleration = DEFAULT_BASE_SPEED * DRIVE_STEPS_PER_REV;
+volatile uint16_t start_acceleration = (uint16_t) (DEFAULT_BASE_SPEED * DRIVE_STEPS_PER_REV);
 
 int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
@@ -335,7 +335,7 @@ bool queue_jobs(Jobs j) {
 // }
 
 bool job_queue_open() {
-  return job_queue.available()>=4 && job_size_queue.available()>0;
+  return job_queue.available()>=4 && job_size_queue.available()>=2;
 }
 
 bool job_done() {
@@ -499,14 +499,14 @@ void machine_loop() {
         *accel_timer.tccrnb = accel_period.prescale;
         *accel_timer.ocra = accel_period.period;
 
-        // Serial.print("a ");
-        // Serial.print(accel_freq);
-        // Serial.print(" ");
-        // Serial.print(accel_period.period);
-        // Serial.print(" ");
-        // Serial.print(*accel_timer.ocra);
-        // Serial.print(" ");
-        // Serial.println(*accel_timer.tccrnb,BIN);
+        Serial.print("a ");
+        Serial.print(accel_freq);
+        Serial.print(" ");
+        Serial.print(accel_period.period);
+        Serial.print(" ");
+        Serial.print(*accel_timer.ocra);
+        Serial.print(" ");
+        Serial.println(*accel_timer.tccrnb,BIN);
       }
 
       //finally, actually set the timers
@@ -542,19 +542,19 @@ void machine_loop() {
 
           set_frequency(id, f_start[id]);
 
-          // Serial.print(id);
-          // Serial.print(" ");
-          // Serial.print(f_start[id]);
-          // Serial.print(" ");
-          // Serial.print(current_jobs[id].acceleration);
-          // Serial.print(" ");
-          // Serial.print(current_jobs[id].target_frequency);
-          // Serial.print(" ");
-          // Serial.print(*timers[id].ocra);
-          // Serial.print(" ");
-          // Serial.print(*timers[id].tccrnb,BIN);
-          // Serial.print(" ");
-          // Serial.println(current_jobs[id].remaining);
+          Serial.print(id);
+          Serial.print(" ");
+          Serial.print(f_start[id]);
+          Serial.print(" ");
+          Serial.print(current_jobs[id].acceleration);
+          Serial.print(" ");
+          Serial.print(current_jobs[id].target_frequency);
+          Serial.print(" ");
+          Serial.print(*timers[id].ocra);
+          Serial.print(" ");
+          Serial.print(*timers[id].tccrnb,BIN);
+          Serial.print(" ");
+          Serial.println(current_jobs[id].remaining);
         } else {
           //disable the timer interrupt and clear the compare value
           *timers[id].tccrnb = 0;

@@ -153,6 +153,9 @@ void interpret_gcode(command c){
       case 501:
         m501();
         break;
+      case 502:
+        m502();
+        break;
       case 503:
         m503();
         break;

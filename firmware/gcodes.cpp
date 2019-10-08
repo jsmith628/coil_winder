@@ -1,16 +1,11 @@
 
 #include <Arduino.h>
+#include <EEPROM.h>
+
 #include "gcodes.h"
 #include "control.h"
 #include "machine.h"
 #include "ascii_control.h"
-
-#define DEFAULT_FEEDRATE 1
-#define DEFAULT_SPINDLE_SPEED 1
-#define DEFAULT_MAX_FEEDRATE INFINITY
-#define DEFAULT_MAX_SPINDLE_SPEED INFINITY
-
-#define DWELL_FREQUENCY 10000
 
 #define A_AXIS 0
 #define B_AXIS 1
@@ -618,7 +613,7 @@ void m201(float w) {
   next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
   queue_jobs(next);
 
-  Serial.print("Max acceleration set to ");
+  Serial.print("Set maximum acceleration to ");
   Serial.println(w);
 }
 
@@ -639,15 +634,44 @@ void m204(float w) {
   next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
   queue_jobs(next);
 
-  Serial.print("Start acceleration set to ");
+  Serial.print("Set start acceleration to ");
   Serial.println(w);
 }
 
+inline void enact_settings() {
+  if(settings.endstops_enabled) {m120();} else {m121();}
+  m203(settings.max_feedrate);
+  g50(settings.max_spindle_speed);
+  m201(settings.max_acceleration);
+  m204(settings.start_acceleration);
+}
+
 //Save settings to EEPROM
-void m500() {}
+void m500() {
+  EEPROM.put(0, settings);
+  Serial.println("Saved settings to EEPROM");
+}
 
 //Load settings from EEPROM
-void m501() {}
+void m501() {
+  EEPROM.get(0, settings);
+  Serial.println("Loaded settings from EEPROM:");
+  enact_settings();
+}
+
+//Factory reset settings
+void m502() { settings = Settings(); enact_settings();}
 
 //Read out settings
-void m503() {}
+void m503() {
+  Serial.println("Current Settings:");
+  Serial.println(settings.endstops_enabled ? "Endstops enabled" : "Endstops disabled");
+  Serial.print("Maximum feedrate: ");
+  Serial.println(settings.max_feedrate);
+  Serial.print("Maximum spindle speed: ");
+  Serial.println(settings.max_spindle_speed);
+  Serial.print("Maximum acceleration: ");
+  Serial.println(settings.max_acceleration);
+  Serial.print("Start Acceleration: ");
+  Serial.println(settings.start_acceleration);
+}
