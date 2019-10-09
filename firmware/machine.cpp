@@ -29,16 +29,19 @@ const Timer<uint16_t> timers[4] = {
   {prescaling_16_bit, &TCNT1, &OCR1A, &OCR1B, &TCCR1A, &TCCR1B, &TIMSK1}
 };
 
+//the timer for doing acceleration
 const Timer<uint8_t> accel_timer = {
   prescaling_timer_2, &TCNT2, &OCR2A, &OCR2B, &TCCR2A, &TCCR2B, &TIMSK2
 };
 
+//a struct for values put into the prescaler and OCRnX
 template<typename T>
 struct Period {
   const uint8_t prescale;
   const T period;
 };
 
+//computes the register values needed for a given frequency
 template<typename T>
 constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre) {
 
@@ -71,6 +74,7 @@ constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre)
   return {prescaling, (T) period};
 }
 
+//macros for constructing the acceleration LUT
 #define LUT1(f,step,ty)     (period_from_frequency<ty>(f, prescaling_16_bit))
 #define LUT2(f,step,ty)     LUT1(f,step,ty),     LUT1((f+1*step),step,ty)
 #define LUT4(f,step,ty)     LUT2(f,step,ty),     LUT2((f+2*step),step,ty)
@@ -93,35 +97,48 @@ constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre)
     _CAT(LUT, size)(start, step, uint16_t) \
   };
 
+//constructs an array in program memory where each index corresponds to a frequency
+//and each value are the OCRnX and TCCRnB prescale values for that frequency
 LUT_INIT(PERIOD_LUT_FREQ_START, (1<<PERIOD_LUT_FREQ_STEP), PERIOD_LUT_SIZE)
 
+//stores the current state of the steppers
 struct JobProgress {
 
+  //bools for what state the job is in
   volatile bool running = false;
   volatile bool accelerating = false;
   volatile bool paused = false;
 
+  //state for counting step progress
   volatile uint32_t total = 0;
   volatile uint32_t remaining = 0;
-  volatile  int32_t last = 0;
+  volatile  int32_t last = 0; //the number of steps taken last job
 
+  //state for acceleration
   volatile float target_frequency = 0;
   volatile float frequency = 0;
   volatile float acceleration = 0;
 
+  //the value of TIMSKn before the stepper was paused
   volatile uint8_t paused_timsk = 0;
+
+  //the condition needed to end this job
   volatile EndConditionType end = IMMEDIATE;
 
+  //the function and parameters to run once this job is complete
   void (* volatile callback)(const void*) = NULL;
   const void * volatile callback_args = NULL;
 
 } current_jobs[SUBJOBS_PER_JOB];
 
+//acceleration parameters for the Drive stepper
 volatile float max_acceleration = DEFAULT_MAX_ACCELERATION * DRIVE_STEPS_PER_REV * ACCEL_TIME_RESOLUTION;
 volatile uint16_t start_acceleration = (uint16_t) (DEFAULT_BASE_SPEED * DRIVE_STEPS_PER_REV);
 
+//returns the number of steps moved last job. Necessary for g31()
 int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
+//a macro that stops a given job. the macro makes sure the code is inlined
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
   current_jobs[id].last = \
@@ -130,6 +147,9 @@ int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
   *timers[id].tccrnb = 0; \
   *timers[id].timsk = 0; \
 }
+
+//Macros for stepping each stepper. If the stepper is dual-edge, it toggles
+//the step pin, else it sets the pin and uses a separate interrupt to clear it
 
 #ifdef FEED_DEDGE
   #define DO_STEP_FEED() (STEP_FEED_PORT ^= 1<<STEP_FEED_BIT)
@@ -151,7 +171,8 @@ int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
 #define DO_STEP_NOOP()
 
-inline bool stepper_dedge(uint8_t id) {
+//an inline function that determines if a stepper steps on both edges
+constexpr inline bool stepper_dedge(uint8_t id) {
   switch(id) {
     #ifndef FEED_DEDGE
       case 0: return true;
@@ -174,7 +195,7 @@ inline bool stepper_dedge(uint8_t id) {
     STOP_JOB(id) \
 }
 
-
+//triggers on the limit switch or stall-guard
 #define TRIGGER_SG(id, pin) { \
   if(!current_jobs[id].paused){ \
     STOP_JOB(id); \
@@ -182,15 +203,19 @@ inline bool stepper_dedge(uint8_t id) {
   } \
 }
 
+//
+//The actual interrupts
+//
+
 void sg_0(void) {TRIGGER_SG(0, SG_FEED)}
 void sg_1(void) {TRIGGER_SG(1, SG_CLAMP)}
 
 ISR(TIMER3_COMPA_vect) { DO_JOB(0, DO_STEP_FEED) }
 ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
 ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
-// ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
+ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 
-#define DIRECT_REGISTER(port) (((uint8_t) port) <= 0x1F)
+//interrupts for clearing the the step pin if the stepper is not dual edge
 
 #ifndef FEED_DEDGE
   ISR(TIMER3_COMPB_vect, ISR_NAKED) { STEP_FEED_PORT &= ~(1<<STEP_FEED_BIT); reti(); }
@@ -204,6 +229,10 @@ ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
   ISR(TIMER5_COMPB_vect, ISR_NAKED) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); reti(); }
 #endif
 
+//
+//used in m112 the callbacks for m17 and m18 in order to set or unset the steppers
+//
+
 void set_enable(uint8_t axis, bool set) {
   switch(axis) {
     case 0: digitalWrite(EN_FEED, (set ^ FEED_INVERT_EN) ? HIGH : LOW); break;
@@ -215,6 +244,10 @@ void set_enable(uint8_t axis, bool set) {
 void enable_stepper(uint8_t axis) { set_enable(axis, true); }
 void disable_stepper(uint8_t axis) { set_enable(axis, false); }
 
+//
+//Used in m201 and m204
+//
+
 void set_max_acceleration(uint16_t accel) {
   max_acceleration = ACCEL_TIME_RESOLUTION * (float) accel;
 }
@@ -223,25 +256,31 @@ void set_start_acceleration(uint16_t speed) {
   start_acceleration = (float) speed;
 }
 
+//and inline function for setting the frequency of a timer that automatically
+//using the LUT if it can and sets OCRnB if the stepper is not dual edge
 inline void set_frequency(uint8_t i, float freq) {
 
   uint16_t f = (uint16_t) abs(freq);
   uint8_t prescale;
   uint16_t period;
   if(f >= PERIOD_LUT_FREQ_START) {
+    //gets the values for the registers from the LUT
     uint16_t index = f - PERIOD_LUT_FREQ_START;
     prescale = pgm_read_byte_near(&periodsLUT[index].prescale);
     period = pgm_read_word_near(&periodsLUT[index].period);
   } else {
+    //else, computes the values directly
     prescale = period_from_frequency<uint16_t>(f, prescaling_16_bit).prescale;
     period = period_from_frequency<uint16_t>(f, prescaling_16_bit).period;
   }
 
+  //sets the timer registers
   *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111)) | prescale;
   *timers[i].ocra = period;
   *timers[i].ocrb = stepper_dedge(i) ? period >> 1 : 0;
 }
 
+//the ISR for doing acceleration
 ISR(TIMER2_COMPA_vect) {
   bool done = true;
 
@@ -249,59 +288,85 @@ ISR(TIMER2_COMPA_vect) {
     if(current_jobs[i].accelerating) {
       float target = current_jobs[i].target_frequency;
       float f = current_jobs[i].frequency;
-
       float sign = signum(target - f);
+
+      //if the job isn't paused, update the frequency
       if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
 
       if(sign != signum(target - f)) {
+        //if we've reached the target frequency, stop accelerating
         f = target;
         current_jobs[i].accelerating = false;
       } else {
+        //else, continue on
         done = false;
       }
 
+      //update the timer and job
       current_jobs[i].frequency = f;
       set_frequency(i, f);
     }
   }
 
+  //if every job has reached its target, stop the timer
   if(done) {
     *accel_timer.tccrnb = 0; \
     *accel_timer.timsk = 0; \
   }
 }
 
+//pauses the steppers on ^Z
 void pause_jobs(){
   cli();
-  for(byte i=0; i<4; i++) {
-    if(!current_jobs[i].paused) {
-      current_jobs[i].paused = true;
-      current_jobs[i].paused_timsk = *timers[i].timsk;
-      *timers[i].timsk = 0;
+    //turn off timer interrupts
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(!current_jobs[i].paused) {
+        current_jobs[i].paused = true;
+        current_jobs[i].paused_timsk = *timers[i].timsk;
+        *timers[i].timsk = 0;
+      }
+    }
+
+  sei();
+
+  //if the drive is running, lower the stepper frequencies to the
+  //start acceleration to avoid skipping when resuming
+  if(current_jobs[2].running && abs(current_jobs[2].frequency)>start_acceleration) {
+    float factor = (float) start_acceleration / abs(current_jobs[2].frequency);
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(current_jobs[i].running){
+        current_jobs[i].frequency *= factor;
+        if(i!=2) current_jobs[i].acceleration = max_acceleration * factor;
+      }
     }
   }
-  sei();
+
 }
 
+//resumes the steppers on ^Z
 void resume_jobs(){
   cli();
-  for(byte i=0; i<4; i++) {
-    if(!current_jobs[i].paused) {
-      current_jobs[i].paused = false;
-      *timers[i].timsk = current_jobs[i].paused_timsk;
+    //restore the interrupts
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(current_jobs[i].paused) {
+        current_jobs[i].paused = false;
+        *timers[i].timsk = current_jobs[i].paused_timsk;
+      }
     }
-  }
   sei();
 }
 
+//the structure containing the future jobs
 Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
 Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
 
+//empties the job queue
 void clear_job_queue() {
   job_queue.clear();
   job_size_queue.clear();
 }
 
+//stops all jobs and clears the queue
 void clear_jobs() {
   cli();
   clear_job_queue();
@@ -309,15 +374,17 @@ void clear_jobs() {
   sei();
 }
 
-
+//determines if the given job actually does anything
 inline bool idempotent(Job j) {
   return (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) && j.callback == NULL;
 }
 
+//adds the jobs to the queue
 bool queue_jobs(Jobs j) {
 
   byte count = 0;
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+    //only add the job if it actually does anything
     if(!idempotent(j.jobs[i])) {
       count++;
       j.jobs[i].axis = i;
@@ -328,16 +395,13 @@ bool queue_jobs(Jobs j) {
   return job_size_queue.push_bottom(count);
 }
 
-// void cancel_last_job() {
-  // if(job_size_queue.count > 0) {
-  //   for(byte i = job_size_queue.pop_bottom(); i>0; i--, job_queue.pop_bottom());
-  // }
-// }
-
+//determines if there is enough space in the queue to fit any of the G or M commands
 bool job_queue_open() {
+  //NOTE: we need 2 possible jobs since M502 and M501 call two sub-commands
   return job_queue.available()>=4 && job_size_queue.available()>=2;
 }
 
+//determines if all subjobs have stopped running and run their callbacks
 bool job_done() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
     if(current_jobs[i].running || current_jobs[i].callback!=NULL) {
@@ -347,15 +411,15 @@ bool job_done() {
   return true;
 }
 
+//determines if any job is paused
 bool paused() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
-    if(current_jobs[i].paused) {
-      return true;
-    }
+    if(current_jobs[i].paused) return true;
   }
   return false;
 }
 
+//determines if the machine is doing something
 bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || !job_done();}
 
 typedef TMC2130Stepper Stepper;
