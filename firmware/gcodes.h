@@ -45,12 +45,6 @@ void g91();
 //Set current position to specified value
 void g92(float a, float b, float w);
 
-//Feedrate per minute
-void g94();
-
-//Feedrate per revolution
-void g95();
-
 //M codes define miscellaneous commands
 
 //Unconditional stop
@@ -112,7 +106,10 @@ void m500();
 //Load settings from EEPROM
 void m501();
 
-//Read out settings from EEPROM
+//Factory reset settings
+void m502();
+
+//Read out settings
 void m503();
 
 #endif

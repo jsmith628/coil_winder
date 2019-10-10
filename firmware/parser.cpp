@@ -13,7 +13,7 @@
 #define P 5
 
 command com;
-char buffer[BUFFERLENGTH+1];
+char buffer[BUFFERLENGTH];
 
 void display_warning(const char * type){
   Serial.print("Warning: ");
@@ -75,12 +75,6 @@ void interpret_gcode(command c){
         break;
       case 92:
         g92(c.modifiers[A].f, c.modifiers[B].f, c.modifiers[W].f);
-        break;
-      case 94:
-        g94();
-        break;
-      case 95:
-        g95();
         break;
     }
   }else if(c.type == 'M'){
@@ -152,6 +146,9 @@ void interpret_gcode(command c){
         break;
       case 501:
         m501();
+        break;
+      case 502:
+        m502();
         break;
       case 503:
         m503();
@@ -256,7 +253,6 @@ bool read_command(){
   if(command_available(BUFFERLENGTH)){
     if(queue_open()) {
       size_t len = next_command(buffer, BUFFERLENGTH);
-      Serial.println(buffer);
       parse(len, buffer);
     }
   }

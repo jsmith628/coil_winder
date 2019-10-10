@@ -29,16 +29,19 @@ const Timer<uint16_t> timers[4] = {
   {prescaling_16_bit, &TCNT1, &OCR1A, &OCR1B, &TCCR1A, &TCCR1B, &TIMSK1}
 };
 
+//the timer for doing acceleration
 const Timer<uint8_t> accel_timer = {
   prescaling_timer_2, &TCNT2, &OCR2A, &OCR2B, &TCCR2A, &TCCR2B, &TIMSK2
 };
 
+//a struct for values put into the prescaler and OCRnX
 template<typename T>
 struct Period {
   const uint8_t prescale;
   const T period;
 };
 
+//computes the register values needed for a given frequency
 template<typename T>
 constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre) {
 
@@ -71,6 +74,7 @@ constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre)
   return {prescaling, (T) period};
 }
 
+//macros for constructing the acceleration LUT
 #define LUT1(f,step,ty)     (period_from_frequency<ty>(f, prescaling_16_bit))
 #define LUT2(f,step,ty)     LUT1(f,step,ty),     LUT1((f+1*step),step,ty)
 #define LUT4(f,step,ty)     LUT2(f,step,ty),     LUT2((f+2*step),step,ty)
@@ -93,35 +97,48 @@ constexpr Period<T> period_from_frequency(uint16_t f, const uint8_t * const pre)
     _CAT(LUT, size)(start, step, uint16_t) \
   };
 
+//constructs an array in program memory where each index corresponds to a frequency
+//and each value are the OCRnX and TCCRnB prescale values for that frequency
 LUT_INIT(PERIOD_LUT_FREQ_START, (1<<PERIOD_LUT_FREQ_STEP), PERIOD_LUT_SIZE)
 
+//stores the current state of the steppers
 struct JobProgress {
 
+  //bools for what state the job is in
   volatile bool running = false;
   volatile bool accelerating = false;
   volatile bool paused = false;
 
+  //state for counting step progress
   volatile uint32_t total = 0;
   volatile uint32_t remaining = 0;
-  volatile  int32_t last = 0;
+  volatile  int32_t last = 0; //the number of steps taken last job
 
+  //state for acceleration
   volatile float target_frequency = 0;
   volatile float frequency = 0;
   volatile float acceleration = 0;
 
+  //the value of TIMSKn before the stepper was paused
   volatile uint8_t paused_timsk = 0;
+
+  //the condition needed to end this job
   volatile EndConditionType end = IMMEDIATE;
 
+  //the function and parameters to run once this job is complete
   void (* volatile callback)(const void*) = NULL;
   const void * volatile callback_args = NULL;
 
 } current_jobs[SUBJOBS_PER_JOB];
 
-volatile float max_acceleration = 0;
-volatile uint16_t start_acceleration = 0x7FFF;
+//acceleration parameters for the Drive stepper
+volatile float max_acceleration = DEFAULT_MAX_ACCELERATION * DRIVE_STEPS_PER_REV * ACCEL_TIME_RESOLUTION;
+volatile uint16_t start_acceleration = (uint16_t) (DEFAULT_BASE_SPEED * DRIVE_STEPS_PER_REV);
 
+//returns the number of steps moved last job. Necessary for g31()
 int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
+//a macro that stops a given job. the macro makes sure the code is inlined
 #define STOP_JOB(id) { \
   current_jobs[id].running = false; \
   current_jobs[id].last = \
@@ -130,6 +147,9 @@ int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
   *timers[id].tccrnb = 0; \
   *timers[id].timsk = 0; \
 }
+
+//Macros for stepping each stepper. If the stepper is dual-edge, it toggles
+//the step pin, else it sets the pin and uses a separate interrupt to clear it
 
 #ifdef FEED_DEDGE
   #define DO_STEP_FEED() (STEP_FEED_PORT ^= 1<<STEP_FEED_BIT)
@@ -151,7 +171,8 @@ int32_t steps_moved(uint8_t axis) {return current_jobs[axis].last;}
 
 #define DO_STEP_NOOP()
 
-inline bool stepper_dedge(uint8_t id) {
+//an inline function that determines if a stepper steps on both edges
+constexpr inline bool stepper_dedge(uint8_t id) {
   switch(id) {
     #ifndef FEED_DEDGE
       case 0: return true;
@@ -174,13 +195,17 @@ inline bool stepper_dedge(uint8_t id) {
     STOP_JOB(id) \
 }
 
-
+//triggers on the limit switch or stall-guard
 #define TRIGGER_SG(id, pin) { \
   if(!current_jobs[id].paused){ \
     STOP_JOB(id); \
     detachInterrupt(digitalPinToInterrupt(pin)); \
   } \
 }
+
+//
+//The actual interrupts
+//
 
 void sg_0(void) {TRIGGER_SG(0, SG_FEED)}
 void sg_1(void) {TRIGGER_SG(1, SG_CLAMP)}
@@ -190,7 +215,7 @@ ISR(TIMER4_COMPA_vect) { DO_JOB(1, DO_STEP_CLAMP) }
 ISR(TIMER5_COMPA_vect) { DO_JOB(2,  DO_STEP_DRIVE) }
 ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
 
-#define DIRECT_REGISTER(port) (((uint8_t) port) <= 0x1F)
+//interrupts for clearing the the step pin if the stepper is not dual edge
 
 #ifndef FEED_DEDGE
   ISR(TIMER3_COMPB_vect, ISR_NAKED) { STEP_FEED_PORT &= ~(1<<STEP_FEED_BIT); reti(); }
@@ -204,6 +229,10 @@ ISR(TIMER1_COMPA_vect) { DO_JOB(3, DO_STEP_NOOP) }
   ISR(TIMER5_COMPB_vect, ISR_NAKED) { STEP_DRIVE_PORT &= ~(1<<STEP_DRIVE_BIT); reti(); }
 #endif
 
+//
+//used in m112 the callbacks for m17 and m18 in order to set or unset the steppers
+//
+
 void set_enable(uint8_t axis, bool set) {
   switch(axis) {
     case 0: digitalWrite(EN_FEED, (set ^ FEED_INVERT_EN) ? HIGH : LOW); break;
@@ -215,14 +244,43 @@ void set_enable(uint8_t axis, bool set) {
 void enable_stepper(uint8_t axis) { set_enable(axis, true); }
 void disable_stepper(uint8_t axis) { set_enable(axis, false); }
 
+//
+//Used in m201 and m204
+//
+
 void set_max_acceleration(uint16_t accel) {
   max_acceleration = ACCEL_TIME_RESOLUTION * (float) accel;
 }
 
 void set_start_acceleration(uint16_t speed) {
-  start_acceleration = max(PERIOD_LUT_FREQ_START, speed);
+  start_acceleration = (float) speed;
 }
 
+//and inline function for setting the frequency of a timer that automatically
+//using the LUT if it can and sets OCRnB if the stepper is not dual edge
+inline void set_frequency(uint8_t i, float freq) {
+
+  uint16_t f = (uint16_t) abs(freq);
+  uint8_t prescale;
+  uint16_t period;
+  if(f >= PERIOD_LUT_FREQ_START) {
+    //gets the values for the registers from the LUT
+    uint16_t index = f - PERIOD_LUT_FREQ_START;
+    prescale = pgm_read_byte_near(&periodsLUT[index].prescale);
+    period = pgm_read_word_near(&periodsLUT[index].period);
+  } else {
+    //else, computes the values directly
+    prescale = period_from_frequency<uint16_t>(f, prescaling_16_bit).prescale;
+    period = period_from_frequency<uint16_t>(f, prescaling_16_bit).period;
+  }
+
+  //sets the timer registers
+  *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111)) | prescale;
+  *timers[i].ocra = period;
+  *timers[i].ocrb = stepper_dedge(i) ? period >> 1 : 0;
+}
+
+//the ISR for doing acceleration
 ISR(TIMER2_COMPA_vect) {
   bool done = true;
 
@@ -230,66 +288,85 @@ ISR(TIMER2_COMPA_vect) {
     if(current_jobs[i].accelerating) {
       float target = current_jobs[i].target_frequency;
       float f = current_jobs[i].frequency;
-
       float sign = signum(target - f);
+
+      //if the job isn't paused, update the frequency
       if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
 
       if(sign != signum(target - f)) {
+        //if we've reached the target frequency, stop accelerating
         f = target;
         current_jobs[i].accelerating = false;
       } else {
+        //else, continue on
         done = false;
       }
 
-      uint16_t index = (uint16_t) abs(f) >> PERIOD_LUT_FREQ_STEP;
+      //update the timer and job
       current_jobs[i].frequency = f;
-      *timers[i].tccrnb = (*timers[i].tccrnb & (~0b111));
-
-      *timers[i].tccrnb |= pgm_read_byte_near(&periodsLUT[index].prescale);
-      *timers[i].ocra = pgm_read_word_near(&periodsLUT[index].period);
-      if(stepper_dedge(i)) {
-        *timers[i].ocrb =  *timers[i].ocra >> 1;
-      }
+      set_frequency(i, f);
     }
   }
 
+  //if every job has reached its target, stop the timer
   if(done) {
     *accel_timer.tccrnb = 0; \
     *accel_timer.timsk = 0; \
   }
 }
 
+//pauses the steppers on ^Z
 void pause_jobs(){
   cli();
-  for(byte i=0; i<4; i++) {
-    if(!current_jobs[i].paused) {
-      current_jobs[i].paused = true;
-      current_jobs[i].paused_timsk = *timers[i].timsk;
-      *timers[i].timsk = 0;
+    //turn off timer interrupts
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(!current_jobs[i].paused) {
+        current_jobs[i].paused = true;
+        current_jobs[i].paused_timsk = *timers[i].timsk;
+        *timers[i].timsk = 0;
+      }
+    }
+
+  sei();
+
+  //if the drive is running, lower the stepper frequencies to the
+  //start acceleration to avoid skipping when resuming
+  if(current_jobs[2].running && abs(current_jobs[2].frequency)>start_acceleration) {
+    float factor = (float) start_acceleration / abs(current_jobs[2].frequency);
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(current_jobs[i].running){
+        current_jobs[i].frequency *= factor;
+        if(i!=2) current_jobs[i].acceleration = max_acceleration * factor;
+      }
     }
   }
-  sei();
+
 }
 
+//resumes the steppers on ^Z
 void resume_jobs(){
   cli();
-  for(byte i=0; i<4; i++) {
-    if(!current_jobs[i].paused) {
-      current_jobs[i].paused = false;
-      *timers[i].timsk = current_jobs[i].paused_timsk;
+    //restore the interrupts
+    for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+      if(current_jobs[i].paused) {
+        current_jobs[i].paused = false;
+        *timers[i].timsk = current_jobs[i].paused_timsk;
+      }
     }
-  }
   sei();
 }
 
+//the structure containing the future jobs
 Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
 Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
 
+//empties the job queue
 void clear_job_queue() {
   job_queue.clear();
   job_size_queue.clear();
 }
 
+//stops all jobs and clears the queue
 void clear_jobs() {
   cli();
   clear_job_queue();
@@ -297,15 +374,17 @@ void clear_jobs() {
   sei();
 }
 
-
+//determines if the given job actually does anything
 inline bool idempotent(Job j) {
   return (j.frequency==0 || j.end.ty==IMMEDIATE || (j.end.ty==COUNT&&j.end.cond==0)) && j.callback == NULL;
 }
 
+//adds the jobs to the queue
 bool queue_jobs(Jobs j) {
 
   byte count = 0;
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) {
+    //only add the job if it actually does anything
     if(!idempotent(j.jobs[i])) {
       count++;
       j.jobs[i].axis = i;
@@ -316,34 +395,31 @@ bool queue_jobs(Jobs j) {
   return job_size_queue.push_bottom(count);
 }
 
-// void cancel_last_job() {
-  // if(job_size_queue.count > 0) {
-  //   for(byte i = job_size_queue.pop_bottom(); i>0; i--, job_queue.pop_bottom());
-  // }
-// }
-
+//determines if there is enough space in the queue to fit any of the G or M commands
 bool job_queue_open() {
-  return job_queue.available()>=4 && job_size_queue.available()>0;
+  //NOTE: we need 2 possible jobs since M502 and M501 call two sub-commands
+  return job_queue.available()>=4 && job_size_queue.available()>=2;
 }
 
+//determines if all subjobs have stopped running and run their callbacks
 bool job_done() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
-    if(current_jobs[i].running && current_jobs[i].callback==NULL) {
+    if(current_jobs[i].running || current_jobs[i].callback!=NULL) {
       return false;
     }
   }
   return true;
 }
 
+//determines if any job is paused
 bool paused() {
   for(byte i=0; i<SUBJOBS_PER_JOB; i++){
-    if(current_jobs[i].paused) {
-      return true;
-    }
+    if(current_jobs[i].paused) return true;
   }
   return false;
 }
 
+//determines if the machine is doing something
 bool busy() { return job_queue.count()>0 || job_size_queue.count()>0 || !job_done();}
 
 typedef TMC2130Stepper Stepper;
@@ -370,199 +446,203 @@ void machine_loop() {
     if(job_size_queue.count()>0){
       byte count = job_size_queue.pop_top();
 
-      cli(); //make sure no random interrupt bs happens
+      //guarrantee that the timers are 100% turned off and not running just in case
+      *accel_timer.timsk = 0;
+      for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
+        *timers[i].timsk = 0;
+      }
 
-        //loop over all the new jobs
-        for(byte i=0; i<count; i++) {
-          Job next = job_queue.pop_top();
-          byte id = next.axis;
+      //NOTE: we cannot turn off interrupts in this sections because then it messes up
+      //the Serial communication buffering for some reason
 
-          if(next.frequency!=0) {
+      //loop over all the new jobs
+      for(uint8_t i=0; i<count; i++) {
+        Job next = job_queue.pop_top();
+        byte id = next.axis;
+
+        //setup the end-condition, get if this job is already over
+        //and setup how many cycles are remaining
+        EndCondition end = next.end;
+        current_jobs[id].end = end.ty;
+        current_jobs[id].running = false;
+
+        switch(end.ty) {
+          case COUNT:
+            if(end.cond > 0 && next.frequency != 0) {
+              current_jobs[id].total = current_jobs[id].remaining = end.cond;
+              current_jobs[id].running = true;
+            }
+            break;
+          case STALL_GUARD:
+            current_jobs[id].running = true;
+            current_jobs[id].total = current_jobs[id].remaining = ~0;
             switch(id) {
               case 0:
-                digitalWrite(DIR_FEED, next.frequency<0 ^ FEED_INVERT_DIR ? HIGH : LOW);
+                feed.sgt(end.cond);
+                attachInterrupt(digitalPinToInterrupt(SG_FEED), sg_0, RISING);
                 break;
               case 1:
-                digitalWrite(DIR_CLAMP, next.frequency<0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
-                break;
-              case 2:
-                digitalWrite(DIR_DRIVE, next.frequency<0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+                clamp.sgt(end.cond);
+                attachInterrupt(digitalPinToInterrupt(SG_CLAMP), sg_1, RISING);
                 break;
             }
-          }
-
-          //setup the end-condition, get if this job is already over
-          //and setup how many cycles are remaining
-          EndCondition end = next.end;
-          current_jobs[id].end = end.ty;
-          current_jobs[id].running = false;
-
-          switch(end.ty) {
-            case COUNT:
-              if(end.cond > 0 && next.frequency != 0) {
-                current_jobs[id].total = current_jobs[id].remaining = end.cond;
-                current_jobs[id].running = true;
-                Serial.print(end.cond);
-                Serial.print(" ");
-                Serial.println(id);
-              }
-              break;
-            case STALL_GUARD:
-              current_jobs[id].running = true;
-              current_jobs[id].total = current_jobs[id].remaining = ~0;
-              switch(id) {
-                case 0:
-                  feed.sgt(end.cond);
-                  attachInterrupt(digitalPinToInterrupt(SG_FEED), sg_0, RISING);
-                  break;
-                case 1:
-                  clamp.sgt(end.cond);
-                  attachInterrupt(digitalPinToInterrupt(SG_CLAMP), sg_1, RISING);
-                  break;
-              }
-              break;
-            case FOREVER:
-              current_jobs[id].running = true;
-              current_jobs[id].total = current_jobs[id].remaining = ~0;
-              break;
-            case IMMEDIATE: break;
-          }
-
-          //setup the callback
-          current_jobs[id].callback = next.callback;
-          current_jobs[id].callback_args = next.callback_args;
-
-          //set the target speed
-          if(current_jobs[id].running) {
-            current_jobs[id].target_frequency = (float) next.frequency;
-          } else {
-            current_jobs[id].target_frequency = 0;
-            current_jobs[id].frequency = 0;
-          }
-
+            break;
+          case FOREVER:
+            current_jobs[id].running = true;
+            current_jobs[id].total = current_jobs[id].remaining = ~0;
+            break;
+          case IMMEDIATE: break;
         }
 
-        const uint8_t drive_axis = 2;
+        //setup the callback
+        current_jobs[id].callback = next.callback;
+        current_jobs[id].callback_args = next.callback_args;
 
-        float sign = signum(current_jobs[drive_axis].frequency);
-        sign = sign==0 ? 1 : sign;
-        float mag = abs(current_jobs[drive_axis].frequency);
-        float tar_sign = signum(current_jobs[drive_axis].target_frequency);
-        tar_sign = tar_sign==0 ? 1 : tar_sign;
-        float tar_mag = abs(current_jobs[drive_axis].target_frequency);
-        float start_accel = (float) start_acceleration;
-
-        float f_start[SUBJOBS_PER_JOB];
-        if((sign != tar_sign) || (mag <= start_accel) || (tar_mag <= start_accel)) {
-          f_start[drive_axis] = (tar_sign * min(tar_mag, start_accel));
+        //set the target speed
+        if(current_jobs[id].running) {
+          current_jobs[id].target_frequency = (float) next.frequency;
         } else {
-          f_start[drive_axis] = current_jobs[drive_axis].frequency;
+          current_jobs[id].target_frequency = 0;
+          current_jobs[id].frequency = 0;
+          current_jobs[id].acceleration = 0;
+          current_jobs[id].accelerating = false;
         }
 
-        float dt = (current_jobs[drive_axis].target_frequency - (float) f_start[drive_axis]);
-        dt /= max_acceleration;
-        dt = abs(dt);
+      }
 
-        //next rescale the start frequencies to be in the same proportion as
-        //the targets
-        for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++){
-          if(i!=drive_axis && current_jobs[i].running) {
-            if(dt!=0 && dt==dt) {
-              float factor = current_jobs[i].target_frequency / current_jobs[drive_axis].target_frequency;
-              f_start[i] = (factor * (float) f_start[drive_axis]);
-            } else {
-              f_start[i] = current_jobs[i].target_frequency;
-            }
+      //
+      //Compute the acceleration of each axis
+      //
+
+      const uint8_t drive_axis = 2;
+
+      float sign = signum(current_jobs[drive_axis].frequency);
+      float mag = abs(current_jobs[drive_axis].frequency);
+      float tar_sign = signum(current_jobs[drive_axis].target_frequency);
+      float tar_mag = abs(current_jobs[drive_axis].target_frequency);
+      float start_accel = (float) start_acceleration;
+
+      float f_start[SUBJOBS_PER_JOB];
+      float accel[SUBJOBS_PER_JOB];
+
+      if((sign != tar_sign) || (mag <= start_accel) || (tar_mag <= start_accel)) {
+        f_start[drive_axis] = (tar_sign * min(tar_mag, start_accel));
+      } else {
+        f_start[drive_axis] = current_jobs[drive_axis].frequency;
+      }
+
+      bool do_accel = current_jobs[drive_axis].target_frequency != f_start[drive_axis];
+      accel[drive_axis] = do_accel ? max_acceleration : 0.0;
+
+      //next rescale the start frequencies and accelerations such that
+      //the ratios between the speeds are always the same
+      for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++){
+        if(i!=drive_axis && current_jobs[i].running) {
+          if(do_accel) {
+            float factor = current_jobs[i].target_frequency / current_jobs[drive_axis].target_frequency;
+            f_start[i] = factor * f_start[drive_axis];
+            accel[i] = factor * accel[drive_axis];
+          } else {
+            f_start[i] = current_jobs[i].target_frequency;
+            accel[i] = 0.0;
           }
         }
+      }
 
-        //setup the acceleration timer
+      //setup the acceleration timer
+
+      if(do_accel) {
 
         const uint16_t accel_freq = (uint16_t) (1.0 / ACCEL_TIME_RESOLUTION);
-        Period<uint8_t> accel_period = period_from_frequency<uint8_t>(
+        const Period<uint8_t> accel_period = period_from_frequency<uint8_t>(
           accel_freq, accel_timer.prescaling
         );
 
         *accel_timer.tcnt = 0;
-        *accel_timer.tccrna = 0;
-        *accel_timer.tccrnb = _BV(WGM12) | accel_period.prescale;
+        *accel_timer.tccrna = _BV(WGM21);
+        *accel_timer.tccrnb = accel_period.prescale;
         *accel_timer.ocra = accel_period.period;
-        *accel_timer.timsk = (1<<1);
 
-        // Serial.print(" ");
-        // Serial.print(accel_freq);
-        // Serial.print(" ");
-        // Serial.print(accel_period.period);
-        // Serial.print(" ");
-        // Serial.print(*accel_timer.ocra);
-        // Serial.print(" ");
-        // Serial.println(*accel_timer.tccrnb,BIN);
+        Serial.print("a ");
+        Serial.print(accel_freq);
+        Serial.print(" ");
+        Serial.print(accel_period.period);
+        Serial.print(" ");
+        Serial.print(*accel_timer.ocra);
+        Serial.print(" ");
+        Serial.println(*accel_timer.tccrnb,BIN);
+      }
 
-        //finally, actually set the timers
-        for(uint8_t id=0; id<SUBJOBS_PER_JOB; id++){
-          //clear the timer value
-          *timers[id].tcnt = 0;
+      //finally, actually set the timers
+      for(uint8_t id=0; id<SUBJOBS_PER_JOB; id++){
+        //clear the timer value
+        *timers[id].tcnt = 0;
 
-          //clear the config
-          *timers[id].tccrna = 0;
+        //clear the config
+        *timers[id].tccrna = 0;
 
-          if(current_jobs[id].running) {
+        if(current_jobs[id].running) {
 
-            current_jobs[id].frequency = f_start[id];
+          current_jobs[id].frequency = f_start[id];
 
-            if(dt!=dt || dt==0) {
-              current_jobs[id].acceleration = 0;
-              current_jobs[id].accelerating = false;
-            } else {
-              current_jobs[id].acceleration =
-                (current_jobs[id].target_frequency - f_start[id]) / dt;
-              current_jobs[id].accelerating = true;
+          current_jobs[id].acceleration = accel[id];
+          current_jobs[id].accelerating = current_jobs[id].acceleration != 0;
+
+          *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
+
+          if(f_start[id]!=0) {
+            switch(id) {
+              case 0:
+                digitalWrite(DIR_FEED, f_start[id]<0 ^ FEED_INVERT_DIR ? HIGH : LOW);
+                break;
+              case 1:
+                digitalWrite(DIR_CLAMP, f_start[id]<0 ^ CLAMP_INVERT_DIR ? HIGH : LOW);
+                break;
+              case 2:
+                digitalWrite(DIR_DRIVE, f_start[id]<0 ^ DRIVE_INVERT_DIR ? HIGH : LOW);
+                break;
             }
+          }
 
-            *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
-            *timers[id].timsk = (1<<1); //enable interrupt of OCRnA
+          set_frequency(id, f_start[id]);
 
-            Period<uint16_t> period =
-              period_from_frequency<uint16_t>((uint16_t) abs(f_start[id]), timers[id].prescaling);
+          Serial.print(id);
+          Serial.print(" ");
+          Serial.print(f_start[id]);
+          Serial.print(" ");
+          Serial.print(current_jobs[id].acceleration);
+          Serial.print(" ");
+          Serial.print(current_jobs[id].target_frequency);
+          Serial.print(" ");
+          Serial.print(*timers[id].ocra);
+          Serial.print(" ");
+          Serial.print(*timers[id].tccrnb,BIN);
+          Serial.print(" ");
+          Serial.println(current_jobs[id].remaining);
+        } else {
+          //disable the timer interrupt and clear the compare value
+          *timers[id].tccrnb = 0;
+          *timers[id].timsk = 0;
+          *timers[id].ocra = 0;
+          *timers[id].ocrb = 0;
+        }
+      }
 
-            *timers[id].ocra = period.period;
-            *timers[id].tccrnb |= period.prescale;
-
-            if(stepper_dedge(id)) {
-              *timers[id].ocrb = period.period>>1;
-              *timers[id].timsk |= (1<<2); //enable interrupt of OCRnB
-            }
-
-            Serial.print(id);
-            Serial.print(" ");
-            Serial.print(f_start[id]);
-            Serial.print(" ");
-            Serial.print(current_jobs[id].acceleration);
-            Serial.print(" ");
-            Serial.print(current_jobs[id].target_frequency);
-            Serial.print(" ");
-            Serial.print(period.period);
-            Serial.print(" ");
-            Serial.print(*timers[id].ocra);
-            Serial.print(" ");
-            Serial.print(*timers[id].tccrnb,BIN);
-            Serial.print(" ");
-            Serial.println(current_jobs[id].remaining);
-          } else {
-            //disable the timer interrupt and clear the compare value
-            *timers[id].tccrnb = 0;
-            *timers[id].timsk = 0;
-            *timers[id].ocra = 0;
-            *timers[id].ocrb = 0;
+      cli();
+        if(do_accel) *accel_timer.timsk = (1<<1);
+        for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
+          if(current_jobs[i].running) {
+            *timers[i].timsk = (1<<1);
+            if(stepper_dedge(i)) *timers[i].timsk |= (1<<2);
           }
         }
+      sei();
 
-      sei();
     } else {
-      cli();
-        for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++)
-          current_jobs[i].frequency = 0.0;
-      sei();
+      //if the last job is done but nothing is queued, then we must assume that
+      //the steppers are stopping, so we need to set the current frequency to 0
+      for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++)
+        current_jobs[i].frequency = 0.0;
     }
   }
 

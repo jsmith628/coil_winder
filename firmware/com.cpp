@@ -53,6 +53,7 @@ void newline() {
   in_comment = false;
   text_buffer.push_bottom('\n');
   buffered_commands++;
+  // Serial.println(buffered_commands);
 }
 
 void(* const PROGMEM control_callbacks[0x20])(void) = {
@@ -106,7 +107,9 @@ size_t next_command(char* dest, size_t max_size) {
     }
 
     dest[len++] = '\0'; //make sure the string is NUL-terminated
-    // Serial.print(buffered_commands);
+    // Serial.println(buffered_commands);
+    // Serial.print(" ");
+    // Serial.print(dest);
     // Serial.print(" ");
     // Serial.println(text_buffer.available());
   }
@@ -115,7 +118,7 @@ size_t next_command(char* dest, size_t max_size) {
 }
 
 void com_loop() {
-  for(byte i=0; i<BUF_PAGE_SIZE && Serial.available() && text_buffer.available()>1; i++) {
+  for(size_t i=0; i<BUF_PAGE_SIZE && Serial.available() && text_buffer.available()>2; i++) {
     //read the next char in transmission
     char x = (char) Serial.read();
 
