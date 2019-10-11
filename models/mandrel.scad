@@ -7,7 +7,7 @@ wall_thickness = 3;
 drive_fit_width = 20;
 drive_fit_length = 50;
 
-chuck_fit_diameter = 4;
+chuck_fit_diameter = 5;
 chuck_fit_length = 6;
 
 diameter = 6;
