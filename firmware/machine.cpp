@@ -282,37 +282,48 @@ inline void set_frequency(uint8_t i, float freq) {
 
 //the ISR for doing acceleration
 ISR(TIMER2_COMPA_vect) {
-  bool done = true;
+  static bool done = true;
+  static uint8_t i = 0;
 
-  for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
-    if(current_jobs[i].accelerating) {
-      float target = current_jobs[i].target_frequency;
-      float f = current_jobs[i].frequency;
-      float sign = signum(target - f);
+  if(current_jobs[i].accelerating) {
+    float target = current_jobs[i].target_frequency;
+    float f = current_jobs[i].frequency;
+    float sign = signum(target - f);
 
-      //if the job isn't paused, update the frequency
-      if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
+    //if the job isn't paused, update the frequency
+    if(!current_jobs[i].paused) f += sign * current_jobs[i].acceleration;
 
-      if(sign != signum(target - f)) {
-        //if we've reached the target frequency, stop accelerating
-        f = target;
-        current_jobs[i].accelerating = false;
-      } else {
-        //else, continue on
-        done = false;
-      }
-
-      //update the timer and job
-      current_jobs[i].frequency = f;
-      set_frequency(i, f);
+    if(sign != signum(target - f)) {
+      //if we've reached the target frequency, stop accelerating
+      f = target;
+      current_jobs[i].accelerating = false;
+    } else {
+      //else, continue on
+      done = false;
     }
+
+    //update the timer and job
+    current_jobs[i].frequency = f;
+    set_frequency(i, f);
   }
 
-  //if every job has reached its target, stop the timer
-  if(done) {
-    *accel_timer.tccrnb = 0; \
-    *accel_timer.timsk = 0; \
+  //increment the loop
+  i++;
+
+  if(i>=SUBJOBS_PER_JOB) {
+
+    //if every job has reached its target, stop the timer
+    if(done) {
+      *accel_timer.tccrnb = 0; \
+      *accel_timer.timsk = 0; \
+    }
+
+    //reset the loop
+    i = 0;
+    done = true;
+
   }
+
 }
 
 //pauses the steppers on ^Z
@@ -576,7 +587,7 @@ void machine_loop() {
 
       if(do_accel) {
 
-        const uint16_t accel_freq = (uint16_t) (1.0 / ACCEL_TIME_RESOLUTION);
+        const uint16_t accel_freq = (uint16_t) (((float) SUBJOBS_PER_JOB) / ACCEL_TIME_RESOLUTION);
         const Period<uint8_t> accel_period = period_from_frequency<uint8_t>(
           accel_freq, accel_timer.prescaling
         );
@@ -649,7 +660,7 @@ void machine_loop() {
           *timers[id].ocra = 0;
           *timers[id].ocrb = 0;
         }
-        
+
       }
 
       //enact the job by enabling timer interrupts
