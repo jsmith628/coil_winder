@@ -444,9 +444,8 @@ void machine_loop() {
 
     //enact the next job if there is one
     if(job_size_queue.count()>0){
-      byte count = job_size_queue.pop_top();
 
-      //guarrantee that the timers are 100% turned off and not running just in case
+      //guarrantee that the timers are 100% turned off and not running (just in case)
       *accel_timer.timsk = 0;
       for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
         *timers[i].timsk = 0;
@@ -455,27 +454,40 @@ void machine_loop() {
       //NOTE: we cannot turn off interrupts in this sections because then it messes up
       //the Serial communication buffering for some reason
 
+      //
       //loop over all the new jobs
+      //
+
+      //get the number of subjobs
+      byte count = job_size_queue.pop_top();
+
+      //loop over all subjobs
       for(uint8_t i=0; i<count; i++) {
+        //get the next subjob from the queue
         Job next = job_queue.pop_top();
         byte id = next.axis;
 
-        //setup the end-condition, get if this job is already over
+        //setup the end-condition, get if this job is already over,
         //and setup how many cycles are remaining
         EndCondition end = next.end;
         current_jobs[id].end = end.ty;
         current_jobs[id].running = false;
 
         switch(end.ty) {
-          case COUNT:
-            if(end.cond > 0 && next.frequency != 0) {
+          case COUNT: //if the job ends after a certain number of steps
+            if(end.cond > 0 && next.frequency != 0) { //check for idempotency
               current_jobs[id].total = current_jobs[id].remaining = end.cond;
               current_jobs[id].running = true;
             }
             break;
-          case STALL_GUARD:
-            current_jobs[id].running = true;
+          case STALL_GUARD: //if the job ends on some endstop
+
+            //initialize to max value so that the number of steps can be counted
+            //at the end of the job
             current_jobs[id].total = current_jobs[id].remaining = ~0;
+            current_jobs[id].running = true;
+
+            //set the limit interrupts and set the stall_guard threshold, if applicable
             switch(id) {
               case 0:
                 feed.sgt(end.cond);
@@ -487,11 +499,12 @@ void machine_loop() {
                 break;
             }
             break;
-          case FOREVER:
+          case FOREVER: //if we want to run the job "forever"
             current_jobs[id].running = true;
             current_jobs[id].total = current_jobs[id].remaining = ~0;
             break;
-          case IMMEDIATE: break;
+          case IMMEDIATE: //if the job should end immediately (this is mainly for jobs with only a callback)
+            break;
         }
 
         //setup the callback
@@ -516,34 +529,44 @@ void machine_loop() {
 
       const uint8_t drive_axis = 2;
 
+      //computed here for convenience
       float sign = signum(current_jobs[drive_axis].frequency);
       float mag = abs(current_jobs[drive_axis].frequency);
       float tar_sign = signum(current_jobs[drive_axis].target_frequency);
       float tar_mag = abs(current_jobs[drive_axis].target_frequency);
-      float start_accel = (float) start_acceleration;
+      float start_accel = (float) abs(start_acceleration);
 
+      //per-axis start speed and acceleration
       float f_start[SUBJOBS_PER_JOB];
       float accel[SUBJOBS_PER_JOB];
 
+      //compute the drive-shaft start frequency
       if((sign != tar_sign) || (mag <= start_accel) || (tar_mag <= start_accel)) {
+        //if the target speed is less than the start acceleration, just directly set it
+        //OR
+        //if we are switching directions or the current speed is less than the
+        //start acceleration snap the speed to the start acceleration
         f_start[drive_axis] = (tar_sign * min(tar_mag, start_accel));
       } else {
+        //else, maintain the current speed
         f_start[drive_axis] = current_jobs[drive_axis].frequency;
       }
 
+      //determine if acceleration is even necessary
       bool do_accel = current_jobs[drive_axis].target_frequency != f_start[drive_axis];
-      accel[drive_axis] = do_accel ? max_acceleration : 0.0;
+      accel[drive_axis] = do_accel ? abs(max_acceleration) : 0.0;
 
       //next rescale the start frequencies and accelerations such that
       //the ratios between the speeds are always the same
       for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++){
         if(i!=drive_axis && current_jobs[i].running) {
+          float target = current_jobs[i].target_frequency;
           if(do_accel) {
-            float factor = current_jobs[i].target_frequency / current_jobs[drive_axis].target_frequency;
-            f_start[i] = factor * f_start[drive_axis];
-            accel[i] = factor * accel[drive_axis];
+            float factor = abs(target / current_jobs[drive_axis].target_frequency);
+            f_start[i] = signum(target) * factor * abs(f_start[drive_axis]);
+            accel[i] = abs(factor * accel[drive_axis]);
           } else {
-            f_start[i] = current_jobs[i].target_frequency;
+            f_start[i] = target;
             accel[i] = 0.0;
           }
         }
@@ -575,21 +598,15 @@ void machine_loop() {
 
       //finally, actually set the timers
       for(uint8_t id=0; id<SUBJOBS_PER_JOB; id++){
-        //clear the timer value
-        *timers[id].tcnt = 0;
-
-        //clear the config
-        *timers[id].tccrna = 0;
 
         if(current_jobs[id].running) {
 
           current_jobs[id].frequency = f_start[id];
 
           current_jobs[id].acceleration = accel[id];
-          current_jobs[id].accelerating = current_jobs[id].acceleration != 0;
+          current_jobs[id].accelerating = do_accel;
 
-          *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
-
+          //set the stepper direction
           if(f_start[id]!=0) {
             switch(id) {
               case 0:
@@ -604,7 +621,12 @@ void machine_loop() {
             }
           }
 
+          //finally, set the timer stuff
+          *timers[id].tcnt = 0; //clear the timer value
+          *timers[id].tccrna = 0; //clear the timer config
+          *timers[id].tccrnb = _BV(WGM12); //clear the timer when it reaches OCRnA
           set_frequency(id, f_start[id]);
+
 
           Serial.print(id);
           Serial.print(" ");
@@ -621,13 +643,16 @@ void machine_loop() {
           Serial.println(current_jobs[id].remaining);
         } else {
           //disable the timer interrupt and clear the compare value
+          *timers[id].tccrna = 0;
           *timers[id].tccrnb = 0;
           *timers[id].timsk = 0;
           *timers[id].ocra = 0;
           *timers[id].ocrb = 0;
         }
+        
       }
 
+      //enact the job by enabling timer interrupts
       cli();
         if(do_accel) *accel_timer.timsk = (1<<1);
         for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
