@@ -371,6 +371,8 @@ void resume_jobs(){
 Queue<Job,JOB_QUEUE_ORDER> job_queue = Queue<Job,JOB_QUEUE_ORDER>();
 Queue<byte,JOB_QUEUE_ORDER> job_size_queue = Queue<byte,JOB_QUEUE_ORDER>();
 
+bool fence_active = false;
+
 //empties the job queue
 void clear_job_queue() {
   job_queue.clear();
@@ -380,9 +382,9 @@ void clear_job_queue() {
 //stops all jobs and clears the queue
 void clear_jobs() {
   cli();
-  clear_job_queue();
   for(byte i=0; i<SUBJOBS_PER_JOB; i++) STOP_JOB(i);
   sei();
+  clear_job_queue();
 }
 
 //determines if the given job actually does anything
@@ -403,13 +405,18 @@ bool queue_jobs(Jobs j) {
     }
   }
 
-  return job_size_queue.push_bottom(count);
+  if(job_size_queue.push_bottom(count)) {
+    if(j.fence) fence_active = true;
+    return true;
+  } else {
+    return false;
+  }
 }
 
 //determines if there is enough space in the queue to fit any of the G or M commands
 bool job_queue_open() {
   //NOTE: we need 2 possible jobs since M502 and M501 call two sub-commands
-  return job_queue.available()>=4 && job_size_queue.available()>=2;
+  return !fence_active && job_queue.available()>=4 && job_size_queue.available()>=2;
 }
 
 //determines if all subjobs have stopped running and run their callbacks
@@ -675,6 +682,9 @@ void machine_loop() {
       sei();
 
     } else {
+      //if the queue is empty and there is a fence active, reactivate the queue
+      fence_active = false;
+
       //if the last job is done but nothing is queued, then we must assume that
       //the steppers are stopping, so we need to set the current frequency to 0
       for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++)

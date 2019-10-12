@@ -80,6 +80,7 @@
 
 #define SUBJOBS_PER_JOB 4
 #define NOOP_JOB {0, 0, {IMMEDIATE, 0}, NULL}
+#define NOOP_JOBS {false, {NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}}
 
 #include "queue.h"
 
@@ -106,6 +107,7 @@ typedef struct {
 } Job;
 
 typedef struct {
+  bool fence;
   Job jobs[SUBJOBS_PER_JOB];
 } Jobs;
 

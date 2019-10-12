@@ -28,8 +28,6 @@ typedef struct {
   float pos; //current units
   int32_t zero; //steps
 
-  bool homing;
-
   float steps_per_unit;
   const float steps_per_machine_unit;
 
@@ -37,9 +35,9 @@ typedef struct {
 } Axis;
 
 Axis axes[NUM_AXES] = {
-  {'A', 0,-FEED_STEP_RANGE,0, 0.0,0,false, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
-  {'B', 0,-CLAMP_STEP_RANGE,0, 0.0,0,false, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
-  {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0,false, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
+  {'A', 0,-FEED_STEP_RANGE,0, 0.0,0, FEED_STEPS_PER_MM,FEED_STEPS_PER_MM, MACHINE},
+  {'B', 0,-CLAMP_STEP_RANGE,0, 0.0,0, CLAMP_STEPS_PER_MM,CLAMP_STEPS_PER_MM, MACHINE},
+  {'W', 0,-0x7FFFFFFF,(int32_t) 0x7FFFFFFF, 0.0,0, DRIVE_STEPS_PER_REV,DRIVE_STEPS_PER_REV, INCREMENTAL},
 };
 
 struct Settings {
@@ -133,7 +131,6 @@ void update_hw_pos(const void* args) {
 
   axes[i].machine_pos += steps_moved(i);
   axes[i].pos = pos_from_steps(i, axes[i].machine_pos);
-  axes[i].homing = false;
 
 }
 
@@ -163,11 +160,11 @@ inline float drive_speed(float da, float w, float s, float travel) {
 //common callback
 
 void queue_callback(void (*callback)(const void*), const void * callback_args) {
-  Job j = NOOP_JOB;
-  j.callback = callback;
-  j.callback_args = callback_args;
+  Jobs j = NOOP_JOBS;
+  j.jobs[NUM_AXES].callback = callback;
+  j.jobs[NUM_AXES].callback_args = callback_args;
 
-  queue_jobs({{NOOP_JOB, NOOP_JOB, NOOP_JOB, j}});
+  queue_jobs(j);
 }
 
 bool interrupt_queued = false;
@@ -185,11 +182,8 @@ void print_callback(const void* msg) {
 
 //control functions
 
-//returns the min number of commands available in the queue
-bool queue_open() {
-  for(byte i=0; i<NUM_AXES; i++) if(axes[i].homing) return false;
-  return job_queue_open();
-}
+//returns whether the queue is open to receive commands
+bool queue_open() { return job_queue_open(); }
 
 //cancels the last command put into the queue (assuming it hasn't started yet)
 void cancel() {}
@@ -253,11 +247,12 @@ void g0 (float a, float b, float w, float s, float f) {
   }
 
   Jobs next;
+  next.fence = true;
 
   next.jobs[A_AXIS] = move_to(A_AXIS, a, travel);
   next.jobs[B_AXIS] = move_to(B_AXIS, b, travel);
   next.jobs[W_AXIS] = move_to(W_AXIS, w, drive);
-  next.jobs[3] = NOOP_JOB;
+  next.jobs[NUM_AXES] = NOOP_JOB;
 
   queue_jobs(next);
 
@@ -290,11 +285,12 @@ void g1 (float a, float b, float w, float s, float f) {
   }
 
   Jobs next;
+  next.fence = false;
 
   next.jobs[A_AXIS] = move_to(A_AXIS, a, a_speed);
   next.jobs[B_AXIS] = move_to(B_AXIS, b, b_speed);
   next.jobs[W_AXIS] = move_to(W_AXIS, w, drive);
-  next.jobs[3] = NOOP_JOB;
+  next.jobs[NUM_AXES] = NOOP_JOB;
 
   queue_jobs(next);
 
@@ -302,17 +298,17 @@ void g1 (float a, float b, float w, float s, float f) {
 
 //Dwell (P (millis) | S (seconds) )
 void g4 (float p, float s) {
-  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  Jobs next = NOOP_JOBS;
 
   if(p==p) {
     if(s==s) p += s*1000.0;
-    next.jobs[3].frequency = DWELL_FREQUENCY;
-    next.jobs[3].end.ty = COUNT;
-    next.jobs[3].end.cond = (uint16_t) (p/1000.0 * DWELL_FREQUENCY);
+    next.jobs[NUM_AXES].frequency = DWELL_FREQUENCY;
+    next.jobs[NUM_AXES].end.ty = COUNT;
+    next.jobs[NUM_AXES].end.cond = (uint16_t) (p/1000.0 * DWELL_FREQUENCY);
   } else if(s==s) {
-    next.jobs[3].frequency = DWELL_FREQUENCY;
-    next.jobs[3].end.ty = COUNT;
-    next.jobs[3].end.cond = (uint16_t) (s * DWELL_FREQUENCY);
+    next.jobs[NUM_AXES].frequency = DWELL_FREQUENCY;
+    next.jobs[NUM_AXES].end.ty = COUNT;
+    next.jobs[NUM_AXES].end.cond = (uint16_t) (s * DWELL_FREQUENCY);
   }
 
   queue_jobs(next);
@@ -331,7 +327,7 @@ void g21 () {
 }
 
 void feed_until_skip(bool do_zero, int8_t axis_dirs[]) {
-  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  Jobs next = NOOP_JOBS;
 
   for(byte i=0; i<NUM_AXES; i++) {
     if(axis_dirs[i]!=0) {
@@ -349,15 +345,13 @@ void feed_until_skip(bool do_zero, int8_t axis_dirs[]) {
       } else {
         next.jobs[i].callback = update_hw_pos;
         next.jobs[i].callback_args = (void *) (int) i;
-        axes[i].homing = true;
+        next.fence = true;
       }
 
     }
   }
 
   queue_jobs(next);
-
-
 
 }
 
@@ -431,7 +425,7 @@ void g91() {
 void g92(float a, float b, float w){
   Serial.print("Position set to: ");
 
-  for(char i=0; i<3; i++) {
+  for(char i=0; i<NUM_AXES; i++) {
       float param = i==0 ? a : i==1 ? b : w;
       if(param==param) {
         set_machine_coords(i);
@@ -439,7 +433,7 @@ void g92(float a, float b, float w){
         Serial.print(axes[i].name);
         Serial.print('=');
         Serial.print(param);
-        if(i<3) Serial.print(", ");
+        if(i<NUM_AXES) Serial.print(", ");
       }
   }
 
@@ -482,6 +476,7 @@ void m17() { m17(true, true, true); }
 //Enable Steppers
 void m17(bool a, bool b, bool w){
   Jobs next;
+  next.fence = false;
   bool enable[3] = {a,b,w};
 
   uint16_t args = 0;
@@ -506,6 +501,7 @@ void m17(bool a, bool b, bool w){
 //Disable steppers
 void m18() {
   Jobs next;
+  next.fence = false;
   for(byte i=0; i<NUM_AXES; i++) {
     next.jobs[i] = NOOP_JOB;
     next.jobs[i].callback = disable_stepper;
@@ -599,7 +595,7 @@ void m201(float w) {
   w = w==w ? abs(w) : DEFAULT_MAX_ACCELERATION;
   settings.max_acceleration = w;
 
-  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  Jobs next = NOOP_JOBS;
   next.jobs[W_AXIS].callback = set_max_acceleration;
   next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
   queue_jobs(next);
@@ -620,7 +616,7 @@ void m204(float w) {
   w = w==w ? abs(w) : DEFAULT_BASE_SPEED;
   settings.start_acceleration = w;
 
-  Jobs next = {{NOOP_JOB, NOOP_JOB, NOOP_JOB, NOOP_JOB}};
+  Jobs next = NOOP_JOBS;
   next.jobs[W_AXIS].callback = set_start_acceleration;
   next.jobs[W_AXIS].callback_args = (void*) (uint16_t) (w * DRIVE_STEPS_PER_REV);
   queue_jobs(next);
