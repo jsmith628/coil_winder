@@ -53,6 +53,7 @@ void newline() {
   in_comment = false;
   text_buffer.push_bottom('\n');
   buffered_commands++;
+  // Serial.write('\n');
   // Serial.println(buffered_commands);
 }
 

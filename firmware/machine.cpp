@@ -604,14 +604,14 @@ void machine_loop() {
         *accel_timer.tccrnb = accel_period.prescale;
         *accel_timer.ocra = accel_period.period;
 
-        Serial.print("a ");
-        Serial.print(accel_freq);
-        Serial.print(" ");
-        Serial.print(accel_period.period);
-        Serial.print(" ");
-        Serial.print(*accel_timer.ocra);
-        Serial.print(" ");
-        Serial.println(*accel_timer.tccrnb,BIN);
+        // Serial.print("a ");
+        // Serial.print(accel_freq);
+        // Serial.print(" ");
+        // Serial.print(accel_period.period);
+        // Serial.print(" ");
+        // Serial.print(*accel_timer.ocra);
+        // Serial.print(" ");
+        // Serial.println(*accel_timer.tccrnb,BIN);
       }
 
       //finally, actually set the timers
@@ -646,32 +646,32 @@ void machine_loop() {
           set_frequency(id, f_start[id]);
 
 
-          Serial.print(id);
-          Serial.print(" ");
-          Serial.print(f_start[id]);
-          Serial.print(" ");
-          Serial.print(current_jobs[id].acceleration);
-          Serial.print(" ");
-          Serial.print(current_jobs[id].target_frequency);
-          Serial.print(" ");
-          Serial.print(*timers[id].ocra);
-          Serial.print(" ");
-          Serial.print(*timers[id].tccrnb,BIN);
-          Serial.print(" ");
-          Serial.println(current_jobs[id].remaining);
+          // Serial.print(id);
+          // Serial.print(" ");
+          // Serial.print(f_start[id]);
+          // Serial.print(" ");
+          // Serial.print(current_jobs[id].acceleration);
+          // Serial.print(" ");
+          // Serial.print(current_jobs[id].target_frequency);
+          // Serial.print(" ");
+          // Serial.print(*timers[id].ocra);
+          // Serial.print(" ");
+          // Serial.print(*timers[id].tccrnb,BIN);
+          // Serial.print(" ");
+          // Serial.println(current_jobs[id].remaining);
         } else {
           //disable the timer interrupt and clear the compare value
-          *timers[id].tccrna = 0;
-          *timers[id].tccrnb = 0;
-          *timers[id].timsk = 0;
-          *timers[id].ocra = 0;
-          *timers[id].ocrb = 0;
+          // *timers[id].tccrna = 0;
+          // *timers[id].tccrnb = 0;
+          // *timers[id].timsk = 0;
+          // *timers[id].ocra = 0;
+          // *timers[id].ocrb = 0;
         }
 
       }
 
       //enact the job by enabling timer interrupts
-      cli();
+      // cli();
         if(do_accel) *accel_timer.timsk = (1<<1);
         for(uint8_t i=0; i<SUBJOBS_PER_JOB; i++) {
           if(current_jobs[i].running) {
@@ -679,7 +679,7 @@ void machine_loop() {
             if(stepper_dedge(i)) *timers[i].timsk |= (1<<2);
           }
         }
-      sei();
+      // sei();
 
     } else {
       //if the queue is empty and there is a fence active, reactivate the queue

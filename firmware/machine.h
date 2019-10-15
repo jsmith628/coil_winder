@@ -17,8 +17,9 @@
 #define CLAMP_DEDGE
 #define CLAMP_MS 16
 #define CLAMP_CURRENT 800
-#define CLAMP_SGT 17
-#define CLAMP_RANGE (143.5-10)
+#define CLAMP_SGT 25
+#define CLAMP_HOME_SPEED 6
+#define CLAMP_RANGE (139.0-5.0)
 
 
 #define EN_FEED 38
@@ -34,8 +35,9 @@
 #define FEED_DEDGE
 #define FEED_MS 16
 #define FEED_CURRENT 800
-#define FEED_SGT 15
-#define FEED_RANGE (200-10)
+#define FEED_SGT 20
+#define FEED_HOME_SPEED 20
+#define FEED_RANGE (193.0)
 
 #define EN_DRIVE 24
 #define DIR_DRIVE 28
@@ -51,7 +53,7 @@
 #define ROD_MM_PER_TURN 8
 
 #define AVR_CLK_FREQ 16000000
-#define ACCEL_TIME_RESOLUTION 0.01
+#define ACCEL_TIME_RESOLUTION 0.05
 #define DWELL_FREQUENCY 10000
 
 #define DEFAULT_FEEDRATE 1

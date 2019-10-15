@@ -83,7 +83,7 @@ Job move_to(byte axis, float x, float s) {
       // Serial.print(" ");
       // Serial.println(axes[axis].max_pos);
 
-      j.end.cond = (uint16_t) abs(new_pos - axes[axis].machine_pos);
+      j.end.cond = (uint32_t) abs(new_pos - axes[axis].machine_pos);
 
       axes[axis].machine_pos = new_pos;
       axes[axis].pos = pos_from_steps(axis, new_pos);
@@ -247,7 +247,7 @@ void g0 (float a, float b, float w, float s, float f) {
   }
 
   Jobs next;
-  next.fence = true;
+  next.fence = false;
 
   next.jobs[A_AXIS] = move_to(A_AXIS, a, travel);
   next.jobs[B_AXIS] = move_to(B_AXIS, b, travel);
@@ -331,10 +331,20 @@ void feed_until_skip(bool do_zero, int8_t axis_dirs[]) {
 
   for(byte i=0; i<NUM_AXES; i++) {
     if(axis_dirs[i]!=0) {
-      next.jobs[i].frequency = (int16_t) (6.0*axes[i].steps_per_machine_unit);
+      float speed = 6.0;
+      switch(i) {
+        case A_AXIS: speed = FEED_HOME_SPEED; break;
+        case B_AXIS: speed = CLAMP_HOME_SPEED; break;
+      }
+
+      next.jobs[i].frequency = (int16_t) (speed*axes[i].steps_per_machine_unit);
       next.jobs[i].frequency *= axis_dirs[i]<0 ? -1 : 1;
       next.jobs[i].end.ty = STALL_GUARD;
-      next.jobs[i].end.cond = FEED_SGT;
+      next.jobs[i].end.cond = 0;
+      switch(i) {
+        case A_AXIS: next.jobs[i].end.cond = FEED_SGT; break;
+        case B_AXIS: next.jobs[i].end.cond = CLAMP_SGT; break;
+      }
 
       if(do_zero) {
         for(byte i=0; i<NUM_AXES; i++) {

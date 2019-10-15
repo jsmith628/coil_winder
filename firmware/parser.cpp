@@ -12,6 +12,8 @@
 #define FR 4
 #define P 5
 
+#define signum(x) ((x)<0 ? -1 : (x)==0 ? 0 : 1)
+
 command com;
 char buffer[BUFFERLENGTH];
 
@@ -59,7 +61,10 @@ void interpret_gcode(command c){
         g28((c.modifiers[A].f == c.modifiers[A].f), (c.modifiers[B].f == c.modifiers[B].f));
         break;
       case 31:
-        g31((int8_t)c.modifiers[A].f,(int8_t)(c.modifiers[B].f!=0));
+        g31(
+          (int8_t)(c.modifiers[A].f == c.modifiers[A].f ? signum(c.modifiers[A].f) : 0),
+          (int8_t)(c.modifiers[B].f == c.modifiers[B].f ? signum(c.modifiers[B].f) : 0)
+        );
         break;
       case 50:
         g50(c.modifiers[S].f);
