@@ -10,8 +10,8 @@ drive_fit_length = 50;
 chuck_fit_diameter = 5;
 chuck_fit_length = 6;
 
-diameter = 6;
-length = 100;
+diameter = 8;
+length = 50;
 
 wire_hole_diameter = 2;
 

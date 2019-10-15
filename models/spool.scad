@@ -6,11 +6,12 @@ epsilon = 0.01;
 
 tolerance = 0.6;
 
-wall_thickness = 3;
+wall_thickness = 3.0;
+shaft_wall_thickness = 0.75;
 
 square_head = false;
 rod_diameter = 6.4+0.5;
-spool_diameter = rod_diameter + wall_thickness;
+spool_diameter = rod_diameter + 2*shaft_wall_thickness;
 spool_length = 20;
 
 holder_width = 20;
