@@ -571,7 +571,7 @@ void machine_loop() {
       }
 
       //determine if acceleration is even necessary
-      bool do_accel = current_jobs[drive_axis].target_frequency != f_start[drive_axis];
+      bool do_accel = current_jobs[drive_axis].running && current_jobs[drive_axis].target_frequency != f_start[drive_axis];
       accel[drive_axis] = do_accel ? abs(max_acceleration) : 0.0;
 
       //next rescale the start frequencies and accelerations such that
@@ -660,12 +660,9 @@ void machine_loop() {
           // Serial.print(" ");
           // Serial.println(current_jobs[id].remaining);
         } else {
-          //disable the timer interrupt and clear the compare value
-          // *timers[id].tccrna = 0;
-          // *timers[id].tccrnb = 0;
-          // *timers[id].timsk = 0;
-          // *timers[id].ocra = 0;
-          // *timers[id].ocrb = 0;
+          current_jobs[id].frequency = 0;
+          current_jobs[id].acceleration = 0;
+          current_jobs[id].accelerating = false;
         }
 
       }
