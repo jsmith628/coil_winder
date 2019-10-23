@@ -10,10 +10,20 @@ drive_fit_length = 50;
 chuck_fit_diameter = 5;
 chuck_fit_length = 6;
 
-diameter = 8;
+spring_diameter = 7;
+wire_diameter = 0.255;
+
+c0 = 0.980364;
+c1 = -0.012436;
+
+dw = wire_diameter/25.4;
+ds = dw + spring_diameter/25.4;
+fact = c0 + c1*(ds/dw);
+
+diameter = (fact*ds - dw) * 25.4;
 length = 50;
 
-wire_hole_diameter = 2;
+wire_hole_diameter = 1;
 
 $fs = 0.1;
 
